@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -11,6 +12,8 @@ def _rounded(value: float, places: int) -> Decimal:
 
 
 def number(n: float) -> str:
+    if not math.isfinite(n):
+        return "∞"
     return f"{_rounded(n, 0):,.0f}".replace(",", NNBSP)
 
 

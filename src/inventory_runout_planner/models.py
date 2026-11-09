@@ -101,10 +101,14 @@ class ScenarioResult(BaseModel):
 
 
 def scenario_errors(raw: dict[str, float | int | str]) -> list[str]:
-    """DEC-10 messages for out-of-range inputs, in field order; [] when Scenario(**raw) is safe to build."""
+    """DEC-10 messages for the four typed inputs, in field order (horizon and method come from bounded widgets)."""
     errors = []
     for key, message, low, high in INPUT_RULES:
-        value = float(raw[key])
+        try:
+            value = float(raw[key])
+        except ValueError:
+            errors.append(f"{message} — you entered {raw[key]}.")
+            continue
         fractional_delay = key == "delay_weeks" and not value.is_integer()
         if not low <= value <= high or fractional_delay:
             errors.append(f"{message} — you entered {value:g}.")

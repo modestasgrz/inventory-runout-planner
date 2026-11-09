@@ -36,13 +36,6 @@ class Draft(BaseModel):
     value_at_risk: float
     cover: float
 
-    def rank_key(self, horizon: int) -> tuple[int, float, str]:
-        return (
-            self.runout or horizon + 1,
-            -self.value_at_risk,
-            self.product.stock_code,
-        )
-
 
 def half_up(value: Fraction) -> int:
     """Exact half-up rounding; callers build value from str() of the inputs so float ties stay ties."""
@@ -130,7 +123,11 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
             else (math.inf if p.stock_on_hand else 0.0)
         )
         if cover > OVERSTOCK_MONTHS:
-            flags.append(f"Overstocked: {cover:.1f} months of cover")
+            flags.append(
+                f"Overstocked: {cover:.1f} months of cover"
+                if math.isfinite(cover)
+                else "Overstocked: no forecast demand"
+            )
         line = None
         arrival = None
         if trigger:
@@ -189,7 +186,9 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
             )
         )
 
-    drafts.sort(key=lambda d: d.rank_key(horizon))
+    drafts.sort(
+        key=lambda d: (d.runout or horizon + 1, -d.value_at_risk, d.product.stock_code)
+    )
     remaining = scenario.budget_gbp
     ranked_lines: dict[str, ReorderLine] = {}
     plan: list[ReorderLine] = []

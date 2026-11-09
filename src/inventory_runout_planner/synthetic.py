@@ -31,19 +31,24 @@ def generate(
             "stock_on_hand": stock,
             "lead_time_weeks": int(rng.choice(LEAD_CHOICES)),
             "moq": round_up(avg * 0.5, 50),
-            "capacity": round_up(max(stock * 1.5, avg * 6), 100),
             "inbound_qty": 0,
             "inbound_weeks": 0,
         }
         if code == "84347":
-            fields |= {"stock_on_hand": round(dec * 0.6), "lead_time_weeks": 10}
+            fields |= {
+                "stock_on_hand": round(dec * 0.6),
+                "lead_time_weeks": 10,
+            }
         elif code == "85123A":
             fields |= {
                 "stock_on_hand": dec + round(last12[1] * 0.5),
                 "lead_time_weeks": 4,
             }
         elif code == "47566":
-            fields |= {"stock_on_hand": round(sum(last12) * 1.3), "lead_time_weeks": 6}
+            fields |= {
+                "stock_on_hand": round(sum(last12) * 1.3),
+                "lead_time_weeks": 6,
+            }
         elif code == "85099B":
             fields |= {
                 "stock_on_hand": dec + 100,
@@ -53,17 +58,14 @@ def generate(
             }
         elif code == "21212":
             fields |= {
-                "stock_on_hand": round(sum(last12[:5]) * 1.0),
+                "stock_on_hand": sum(last12[:5]),
                 "lead_time_weeks": 8,
                 "inbound_qty": round_up(sum(last12[5:]) * 1.2, 100),
                 "inbound_weeks": 16,
             }
+        stock_total = fields["stock_on_hand"] + fields["inbound_qty"]
         fields["capacity"] = round_up(
-            max(
-                fields["capacity"],
-                (fields["stock_on_hand"] + fields["inbound_qty"]) * 1.2,
-            ),
-            100,
+            max(fields["stock_on_hand"] * 1.5, avg * 6, stock_total * 1.2), 100
         )
         description, group = names[code]
         products.append(

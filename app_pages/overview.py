@@ -37,11 +37,7 @@ if earliest is not None and earliest.runout_month:
 else:
     st.success("No product runs out within the horizon.")
 
-order_now = [
-    p
-    for p in result.products
-    if p.runout_month and p.runout_month <= month_key(p.lead_months + 1)
-]
+order_now = [p for p in result.products if p.order_now]
 st.subheader("Order now")
 st.caption(
     "Products that run out within their lead time + 1 month if nothing is ordered, most urgent first."

@@ -9,7 +9,7 @@ Python 3.12+, uv, Streamlit (pinned), Plotly, pandas, Pydantic, loguru (console 
 - `make check` — ruff, ruff format, mypy strict, security scans, unit tests
 - `make fix` — ruff autofix + format
 - `make test` — unit tests (excludes `tests/acceptance`)
-- `make run` — the app on http://127.0.0.1:8781
+- `make run` — the app on http://127.0.0.1:8786
 - `make requirements` — export `requirements.txt` from `uv.lock` (Streamlit Community Cloud)
 - Always `uv run ...`
 

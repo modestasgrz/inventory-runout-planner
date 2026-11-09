@@ -6,7 +6,7 @@ from runout_toy import DATA_DIR
 
 def test_ac_03_synthetic_csv() -> None:
     """AC-03: products_synthetic.csv has the Product columns, one row per demand code, every row validates,
-    and synthetic.generate(history, prices, seed=42) reproduces it exactly."""
+    and synthetic.generate(history, prices, names, seed=42) reproduces it exactly."""
     products = pd.read_csv(
         DATA_DIR / "products_synthetic.csv", dtype={"stock_code": str}
     )
@@ -18,13 +18,19 @@ def test_ac_03_synthetic_csv() -> None:
     assert sorted(products["stock_code"]) == sorted(set(demand["stock_code"]))
     rows = [Product.model_validate(r) for r in products.to_dict("records")]
     history = {
-        code: g.sort_values("month")["units"].astype(int).tolist()
+        str(code): g.sort_values("month")["units"].astype(int).tolist()
         for code, g in demand.groupby("stock_code")
     }
     price_map = dict(
         zip(prices["stock_code"], prices["median_price"].astype(float), strict=True)
     )
-    regenerated = generate(history, price_map, seed=42)
+    names = {
+        str(code): (str(desc), str(group))
+        for code, desc, group in demand[["stock_code", "description", "group"]]
+        .drop_duplicates()
+        .itertuples(index=False)
+    }
+    regenerated = generate(history, price_map, names, seed=42)
     assert sorted(regenerated, key=lambda p: p.stock_code) == sorted(
         rows, key=lambda p: p.stock_code
     )

@@ -1,6 +1,6 @@
 from inventory_runout_planner.models import scenario_errors
 
-VALID = {
+VALID: dict[str, float | int | str] = {
     "horizon_months": 12,
     "growth_pct": 0,
     "delay_weeks": 0,
@@ -12,7 +12,7 @@ VALID = {
 
 def test_ac_21_validation() -> None:
     """AC-21: out-of-range inputs give the 4 DEC-10 messages in order; valid inputs give none."""
-    bad = VALID | {
+    bad: dict[str, float | int | str] = VALID | {
         "growth_pct": 150,
         "delay_weeks": 30,
         "budget_gbp": -100,

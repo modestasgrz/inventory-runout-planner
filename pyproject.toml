@@ -37,6 +37,10 @@ extend-exclude = [".semgrep/fixtures"]
 [tool.ruff.lint]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+# keep import grouping stable whether or not the core modules exist yet (acceptance tests are written before the build)
+known-third-party = ["inventory_runout_planner", "runout_toy"]
+
 [tool.mypy]
 strict = true
 ignore_missing_imports = true

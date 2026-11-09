@@ -16,7 +16,7 @@ Demand is real: monthly units for 36 products of a UK online gift and homeware w
 | Reorder plan | Ranked list of the next order per product, budget against spend, the reason behind every line with its numbers, 4 CSV exports |
 | Methodology | Every formula, the data cleaning, the synthetic-data rules and the hand-calculated test cases |
 
-The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier delay, purchase budget, safety stock and forecast method. Presets: **Baseline**, **Peak season +25%**, **Supplier delay +3 weeks**, **Tight budget**, **Efficiency**. **Reset to Baseline** puts everything back. Every page recalculates from the same scenario, so a KPI shows the same value everywhere. Invalid inputs (e.g. a negative budget) show a clear message instead of numbers.
+The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier delay, purchase budget, safety stock and forecast method. Presets: **Baseline**, **Peak season +25%**, **Supplier delay +3 weeks**, **Tight budget**, **Efficiency**. Editing any input switches the preset to **Custom**; picking a preset reloads its values. **Reset to Baseline** puts everything back. Every page recalculates from the same scenario, so a KPI shows the same value everywhere. Invalid inputs (e.g. a negative budget) show a clear message instead of numbers.
 
 ## Results on the real demand data (Baseline: £100 000 budget, 12 months, 1 month safety stock)
 

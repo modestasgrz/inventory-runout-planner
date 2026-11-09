@@ -80,6 +80,7 @@ class ProductResult(BaseModel):
     flags: list[str]
     value_at_risk_gbp: float
     cover_months: float
+    order_now: bool
 
 
 class Kpis(BaseModel):

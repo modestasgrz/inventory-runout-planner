@@ -258,18 +258,14 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 flags=d.flags,
                 value_at_risk_gbp=d.value_at_risk,
                 cover_months=d.cover,
+                order_now=runout is not None and runout <= d.lead + 1,
             )
         )
 
     with_runout = [r for r in products if r.runout_month]
     earliest = with_runout[0] if with_runout else None
-    order_now = [
-        r
-        for r in products
-        if r.runout_month and r.runout_month <= month_key(r.lead_months + 1)
-    ]
     kpis = Kpis(
-        products_at_risk=len(order_now),
+        products_at_risk=sum(r.order_now for r in products),
         earliest_runout_code=earliest.stock_code if earliest else None,
         earliest_runout_month=earliest.runout_month if earliest else None,
         earliest_limiting_factor=earliest.limiting_factor if earliest else None,

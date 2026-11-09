@@ -1,5 +1,6 @@
 from typing import Literal
 
+from inventory_runout_planner.fmt import number
 from pydantic import BaseModel, Field
 
 Method = Literal["seasonal_naive", "trailing_3m"]
@@ -111,5 +112,6 @@ def scenario_errors(raw: dict[str, float | int | str]) -> list[str]:
             continue
         fractional_delay = key == "delay_weeks" and not value.is_integer()
         if not low <= value <= high or fractional_delay:
-            errors.append(f"{message} — you entered {value:g}.")
+            entered = number(value) if value.is_integer() else f"{value:g}"
+            errors.append(f"{message} — you entered {entered}.")
     return errors

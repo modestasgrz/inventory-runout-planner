@@ -189,7 +189,12 @@ def test_random_world_invariants(seed: int) -> None:
     assert codes_plan == codes_prod
     # kpis
     at_risk = [p for p in res.products if p.runout_month]
-    assert res.kpis.products_at_risk == len(at_risk)
+    order_now = [
+        p
+        for p in at_risk
+        if p.runout_month and p.runout_month <= month_key(p.lead_months + 1)
+    ]
+    assert res.kpis.products_at_risk == len(order_now)
     if at_risk:
         best = min(
             at_risk,

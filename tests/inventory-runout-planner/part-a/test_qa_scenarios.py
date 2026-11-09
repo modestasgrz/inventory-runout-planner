@@ -139,7 +139,7 @@ def test_scenario_errors_exact_boundaries_pass() -> None:
         (
             "budget_gbp",
             1_000_001,
-            "Budget (£) must be between 0 and 1 000 000 — you entered 1e+06.",
+            "Budget (£) must be between 0 and 1 000 000 — you entered 1\u202f000\u202f001.",
         ),
         (
             "budget_gbp",

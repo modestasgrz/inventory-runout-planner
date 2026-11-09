@@ -21,6 +21,7 @@ st.set_page_config(
 theme.apply()
 
 INPUT_KEYS = list(Scenario.model_fields)
+CUSTOM = "Custom"
 METHOD_LABELS = {
     "seasonal_naive": "Seasonal naive (same month last year)",
     "trailing_3m": "Trailing 3-month average",
@@ -33,7 +34,12 @@ def load_preset(name: str) -> None:
 
 
 def on_preset() -> None:
-    load_preset(st.session_state["preset"])
+    if st.session_state["preset"] != CUSTOM:
+        load_preset(st.session_state["preset"])
+
+
+def on_edit() -> None:
+    st.session_state["preset"] = CUSTOM
 
 
 def on_reset() -> None:
@@ -73,24 +79,37 @@ navigation = st.navigation(
 
 with st.sidebar:
     st.markdown("### Scenario")
-    st.selectbox("Preset", list(PRESETS), key="preset", on_change=on_preset)
-    st.slider("Horizon (months)", min_value=6, max_value=12, key="horizon_months")
-    st.number_input("Demand growth (%)", key="growth_pct", step=5.0, format="%g")
-    st.number_input("Supplier delay (weeks)", key="delay_weeks", step=1)
-    st.number_input("Budget (£)", key="budget_gbp", step=1000.0, format="%.0f")
-    st.number_input("Safety stock (months)", key="safety_months", step=0.5, format="%g")
+    st.selectbox("Preset", [*PRESETS, CUSTOM], key="preset", on_change=on_preset)
+    st.slider(
+        "Horizon (months)",
+        min_value=6,
+        max_value=12,
+        key="horizon_months",
+        on_change=on_edit,
+    )
+    st.number_input(
+        "Demand growth (%)", key="growth_pct", step=5.0, format="%g", on_change=on_edit
+    )
+    st.number_input(
+        "Supplier delay (weeks)", key="delay_weeks", step=1, on_change=on_edit
+    )
+    st.number_input(
+        "Budget (£)", key="budget_gbp", step=1000.0, format="%.0f", on_change=on_edit
+    )
+    st.number_input(
+        "Safety stock (months)",
+        key="safety_months",
+        step=0.5,
+        format="%g",
+        on_change=on_edit,
+    )
     st.radio(
         "Forecast method",
         list(METHOD_LABELS),
         key="method",
         format_func=METHOD_LABELS.__getitem__,
+        on_change=on_edit,
     )
-    if {key: st.session_state[key] for key in INPUT_KEYS} != PRESETS[
-        st.session_state["preset"]
-    ].model_dump():
-        st.caption(
-            f"Edited: the inputs no longer match the {st.session_state['preset']} preset. Use Reset or pick another preset."
-        )
     st.button("Reset to Baseline", key="reset", on_click=on_reset, width="stretch")
     st.divider()
     st.caption(ATTRIBUTION)

@@ -140,12 +140,12 @@ def test_preset_populates_inputs(name: str) -> None:
     assert at.radio(key="method").value == s.method
 
 
-def test_edit_keeps_preset_changes_kpis_reset_restores() -> None:
+def test_edit_switches_to_custom_changes_kpis_reset_restores() -> None:
     at = app()
     base = kpis(at)
     at = set_input(at, "growth_pct", 10)
     assert not at.exception
-    assert at.selectbox(key="preset").value == "Baseline"
+    assert at.selectbox(key="preset").value == "Custom"
     assert kpis(at) != base
     for page in PAGES:
         at.switch_page(page).run()

@@ -1,0 +1,16 @@
+[theme]
+base = "dark"
+backgroundColor = "#0B1730"
+secondaryBackgroundColor = "#13223F"
+textColor = "#E6ECF5"
+primaryColor = "#3B82F6"
+font = '"Inter", "Avenir Next", "Helvetica Neue", Arial, sans-serif'
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

@@ -46,7 +46,7 @@ figure.update_layout(
     xaxis={"tickprefix": "£"},
     margin={"t": 30, "b": 40},
 )
-st.plotly_chart(figure, use_container_width=True)
+st.plotly_chart(figure, width="stretch")
 
 st.dataframe(
     pd.DataFrame(
@@ -79,7 +79,7 @@ st.dataframe(
         ],
     ),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     height=35 * len(result.plan) + 38,
     column_config={
         "Rank": st.column_config.NumberColumn(width="small"),
@@ -108,5 +108,5 @@ for column, (name, frame) in zip(columns, tables(data, result).items(), strict=T
         frame.to_csv(index=False),
         file_name=name,
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )

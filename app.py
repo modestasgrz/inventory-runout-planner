@@ -80,9 +80,7 @@ with st.sidebar:
         key="method",
         format_func=METHOD_LABELS.__getitem__,
     )
-    st.button(
-        "Reset to Baseline", key="reset", on_click=on_reset, use_container_width=True
-    )
+    st.button("Reset to Baseline", key="reset", on_click=on_reset, width="stretch")
     st.divider()
     st.caption(ATTRIBUTION)
 

@@ -67,7 +67,7 @@ figure.update_layout(
     xaxis={"dtick": "M3", "tickformat": "%b %Y"},
     title=f"{p.description} ({p.stock_code}) · monthly units",
 )
-st.plotly_chart(figure, use_container_width=True)
+st.plotly_chart(figure, width="stretch")
 
 if p.order:
     st.markdown(f"**Next order** · {p.order.reason}")
@@ -102,13 +102,13 @@ st.caption(
 st.dataframe(
     table(p.months),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     height=35 * len(p.months) + 38,
 )
 with st.expander("Projection with the suggested order (if funded)"):
     st.dataframe(
         table(p.plan_months),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         height=35 * len(p.plan_months) + 38,
     )

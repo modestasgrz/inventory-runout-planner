@@ -41,7 +41,7 @@ st.dataframe(
         columns=["Input", "Value"],
     ),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("Presets side by side")
@@ -62,7 +62,7 @@ for name, r in runs.items():
             "Unfunded orders": number(k.unfunded_orders),
         }
     )
-st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 figure = go.Figure()
 names = list(runs)
@@ -97,4 +97,4 @@ figure.update_layout(
     yaxis={"tickprefix": "£"},
     title="Spend by preset",
 )
-st.plotly_chart(figure, use_container_width=True)
+st.plotly_chart(figure, width="stretch")

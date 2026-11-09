@@ -92,7 +92,7 @@ st.dataframe(
         columns=["Test", "Setup", "Expected result"],
     ),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("Sources")

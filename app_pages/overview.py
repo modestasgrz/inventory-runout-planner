@@ -69,7 +69,7 @@ st.dataframe(
         ],
     ),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     height=35 * len(order_now) + 38,
 )
 
@@ -100,7 +100,7 @@ for factor in ["lead time", "budget", "capacity", "stock"]:
 figure.update_layout(
     template=theme.TEMPLATE, barmode="stack", height=300, yaxis_title="Products"
 )
-st.plotly_chart(figure, use_container_width=True)
+st.plotly_chart(figure, width="stretch")
 
 st.subheader("Flags")
 st.caption(
@@ -121,7 +121,7 @@ flag_rows = [
 st.dataframe(
     pd.DataFrame(flag_rows, columns=["Product", "Code", "Flag"]),
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     height=35 * len(flag_rows) + 38,
     column_config={
         "Product": st.column_config.TextColumn(width="medium"),

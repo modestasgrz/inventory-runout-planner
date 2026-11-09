@@ -22,7 +22,7 @@ inbound = (
     else "none"
 )
 st.markdown(
-    f"Stock on hand **{number(product.stock_on_hand)}** · lead time **{product.lead_time_weeks} weeks** · "
+    f"Stock on hand **{number(product.stock_on_hand)}** · lead time **{product.lead_time_weeks} weeks + delay {result.scenario.delay_weeks} weeks = {p.lead_months} month(s)** · "
     f"MOQ **{number(product.moq)}** · capacity **{number(product.capacity)}** · "
     f"unit cost **{gbp(product.unit_cost, pence=True)}** · inbound order **{inbound}**"
 )
@@ -52,12 +52,13 @@ figure.add_scatter(
     name="Stock, do nothing",
     line={"color": theme.RED},
 )
-figure.add_scatter(
-    x=forecast_x,
-    y=[r.closing for r in p.plan_months],
-    name="Stock, with next order",
-    line={"color": theme.GREEN},
-)
+if p.order and p.order.funded:
+    figure.add_scatter(
+        x=forecast_x,
+        y=[r.closing for r in p.plan_months],
+        name="Stock, with next order (funded)",
+        line={"color": theme.GREEN},
+    )
 if p.runout_month:
     figure.add_vline(x=f"{p.runout_month}-01", line={"color": theme.RED, "dash": "dot"})
 figure.update_layout(
@@ -65,7 +66,7 @@ figure.update_layout(
     height=420,
     yaxis_title="Units",
     xaxis={"dtick": "M3", "tickformat": "%b %Y"},
-    title=f"{p.description} ({p.stock_code}) · monthly units",
+    title=f"{product_label(p.description, p.stock_code)} · monthly units",
 )
 st.plotly_chart(figure, width="stretch")
 

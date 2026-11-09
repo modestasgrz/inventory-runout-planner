@@ -5,6 +5,7 @@ from inventory_runout_planner.exports import tables
 from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import PlannerData, ScenarioResult
 from inventory_runout_planner.ui import theme
+from inventory_runout_planner.ui.state import product_label
 
 result: ScenarioResult = st.session_state["result"]
 data: PlannerData = st.session_state["data"]
@@ -94,7 +95,7 @@ st.dataframe(
 with st.expander("Why each order: the numbers behind every line"):
     for line in result.plan:
         st.markdown(
-            f"**{line.rank}. {line.description} ({line.stock_code})** — {line.reason}"
+            f"**{line.rank}. {product_label(line.description, line.stock_code)}** — {line.reason}"
         )
 
 st.subheader("Exports")

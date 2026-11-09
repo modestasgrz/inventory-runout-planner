@@ -5,12 +5,12 @@ from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import ScenarioResult
 from inventory_runout_planner.presets import PRESETS
 from inventory_runout_planner.ui import theme
-from inventory_runout_planner.ui.state import run_scenario
+from inventory_runout_planner.ui.state import product_label, run_scenario
 
 result: ScenarioResult = st.session_state["result"]
 directory: str = st.session_state["data_dir"]
 LEVERS = {
-    "Baseline": "Today's plan: no growth, suppliers on time, £100 000 budget, 1 month safety stock.",
+    "Baseline": "Today's plan: no growth, suppliers on time, £100 000 budget, 1 month safety stock.",
     "Peak season +25%": "Demand 25 % above last year in every month.",
     "Supplier delay +3 weeks": "Every supplier and every open inbound order arrives 3 weeks later.",
     "Tight budget": "Half the purchase budget.",
@@ -47,6 +47,7 @@ st.dataframe(
 st.subheader("Presets side by side")
 st.markdown("\n".join(f"- **{name}:** {lever}" for name, lever in LEVERS.items()))
 runs = {name: run_scenario(preset, directory) for name, preset in PRESETS.items()}
+descriptions = {p.stock_code: p.description for p in result.products}
 rows = []
 for name, r in runs.items():
     k = r.kpis
@@ -54,8 +55,8 @@ for name, r in runs.items():
         {
             "Preset": name,
             "Products at risk": number(k.products_at_risk),
-            "Earliest run-out": f"{month(k.earliest_runout_month)} · {k.earliest_runout_code}"
-            if k.earliest_runout_month
+            "Earliest run-out": f"{month(k.earliest_runout_month)} · {product_label(descriptions[k.earliest_runout_code], k.earliest_runout_code)}"
+            if k.earliest_runout_month and k.earliest_runout_code
             else "None",
             "Funded": gbp(k.funded_spend_gbp),
             "Suggested": gbp(k.suggested_spend_gbp),

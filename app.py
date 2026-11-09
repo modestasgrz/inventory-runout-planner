@@ -1,5 +1,7 @@
 """Inventory run-out planner: entry file with the shared sidebar, notices and KPI strip (DEC-14, DEC-15)."""
 
+import os
+
 import streamlit as st
 from inventory_runout_planner.data import DataError
 from inventory_runout_planner.fmt import gbp, month, number
@@ -7,12 +9,11 @@ from inventory_runout_planner.models import Scenario, scenario_errors
 from inventory_runout_planner.presets import ATTRIBUTION, PRESETS
 from inventory_runout_planner.ui import theme
 from inventory_runout_planner.ui.state import (
-    data_dir,
+    DEFAULT_DATA_DIR,
     load_data,
     product_label,
     run_scenario,
 )
-from loguru import logger
 
 st.set_page_config(
     page_title="Inventory run-out planner", page_icon="📦", layout="wide"
@@ -42,6 +43,10 @@ def on_reset() -> None:
 
 if "preset" not in st.session_state:
     on_reset()
+if "product" in st.session_state:
+    st.session_state["product"] = st.session_state[
+        "product"
+    ]  # keep the Forecast pick across pages
 
 navigation = st.navigation(
     [
@@ -80,6 +85,12 @@ with st.sidebar:
         key="method",
         format_func=METHOD_LABELS.__getitem__,
     )
+    if {key: st.session_state[key] for key in INPUT_KEYS} != PRESETS[
+        st.session_state["preset"]
+    ].model_dump():
+        st.caption(
+            f"Edited: the inputs no longer match the {st.session_state['preset']} preset. Use Reset or pick another preset."
+        )
     st.button("Reset to Baseline", key="reset", on_click=on_reset, width="stretch")
     st.divider()
     st.caption(ATTRIBUTION)
@@ -92,7 +103,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-directory = data_dir()
+directory = os.environ.get("RUNOUT_DATA_DIR", str(DEFAULT_DATA_DIR))
 try:
     data = load_data(directory)
 except DataError as e:
@@ -108,12 +119,6 @@ if errors:
 
 scenario = Scenario.model_validate(raw)
 result = run_scenario(scenario, directory)
-logger.info(
-    "Scenario run: {}",
-    st.session_state["preset"]
-    if scenario == PRESETS[st.session_state["preset"]]
-    else "custom",
-)
 st.session_state["data"] = data
 st.session_state["result"] = result
 st.session_state["data_dir"] = directory

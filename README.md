@@ -22,12 +22,12 @@ The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier
 
 | | Baseline | Peak season +25% | Supplier delay +3 weeks | Tight budget (£50 000) | Efficiency (½ month safety) |
 | --- | --- | --- | --- | --- | --- |
-| Products to order now | 7 | 12 | 14 | 7 | 7 |
-| Earliest run-out | Dec 2011 · Rotating silver angels t-light holder (lead time) | Dec 2011 · Jumbo bag red retrospot (lead time) | Dec 2011 · Rotating silver angels (lead time) | Dec 2011 · Rotating silver angels (lead time) | Dec 2011 · Rotating silver angels (lead time) |
+| Products at risk (run out within lead time + 1 month: order now) | 7 | 12 | 14 | 7 | 7 |
+| Earliest run-out | Dec 2011 · ROTATING SILVER ANGELS T-LIGHT HLDR (84347), lead time | Dec 2011 · JUMBO BAG RED RETROSPOT (85099B), lead time | Dec 2011 · ROTATING SILVER ANGELS T-LIGHT HLDR (84347), lead time | Dec 2011 · ROTATING SILVER ANGELS T-LIGHT HLDR (84347), lead time | Dec 2011 · ROTATING SILVER ANGELS T-LIGHT HLDR (84347), lead time |
 | Funded / suggested spend | £99 993 / £124 083 | £99 984 / £162 296 | £99 772 / £127 909 | £49 834 / £124 083 | £94 251 / £111 367 |
 | Unfunded orders | 5 | 14 | 8 | 24 | 1 |
 
-A +3-week supplier delay pushes the open purchase order for *Jumbo bag red retrospot* from January into February, so the product runs out in January. The table above is where a buyer would spot that.
+A +3-week supplier delay pushes the open purchase order for JUMBO BAG RED RETROSPOT (85099B) from January into February, so the product runs out in January. The table above is where a buyer would spot that.
 
 ![Reorder plan](docs/screenshots/1440-reorder-plan.png)
 
@@ -46,7 +46,7 @@ Full detail on the Methodology page and in [`specs/inventory-runout-planner.md`]
 
 - 37 acceptance tests, one per acceptance criterion in the spec, including 8 hand-calculated cases (e.g. 100 units in stock, 60 a month, lead time 4 weeks → runs out Jan 2012, order 200 units = 180 + 60 − 40, £400.00).
 - 341 unit tests on the calculation core: property tests over random products and scenarios (stock is conserved, never negative, spend ≤ budget, ranking order), every input boundary, data-file error paths, exact half-up rounding.
-- Streamlit `AppTest` checks: every page renders, the KPI cards match across all 5 pages, presets move the KPIs, Reset restores them, bad input shows the error, missing data files show a clear message.
+- 73 more Streamlit `AppTest` checks on top of the acceptance tests: every page renders, the KPI cards match across all 5 pages, presets move the KPIs, Reset restores them, bad input shows the error, missing data files show a clear message.
 
 ## Run it yourself
 

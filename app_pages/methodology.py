@@ -47,7 +47,7 @@ st.markdown(
 
 st.subheader("Hand-calculated test cases")
 st.caption(
-    "Toy products, 60 units of demand every month, horizon 6 months, budget £1 000, safety 1 month, lead 4 weeks, MOQ 50, capacity 400, unit cost £2.00 unless stated. Each row is an automated acceptance test."
+    "Toy products, 60 units of demand every month, horizon 6 months, budget £1 000, safety 1 month, lead 4 weeks, MOQ 50, capacity 400, unit cost £2.00 unless stated. Each row is an automated acceptance test."
 )
 st.dataframe(
     pd.DataFrame(
@@ -70,7 +70,7 @@ st.dataframe(
             [
                 "AC-10",
                 "3 products, budget £650",
-                "Ranks 1–3; £400 funded, £480 skipped (only £250 left), £200 funded → £600.00 funded of £1 080.00",
+                "Ranks 1–3; £400 funded, £480 skipped (only £250 left), £200 funded → £600.00 funded of £1 080.00",
             ],
             ["AC-11", "Budget £300", "£400 order not funded → limiting factor budget"],
             [
@@ -85,8 +85,8 @@ st.dataframe(
             ],
             [
                 "AC-14",
-                "1 000 in stock, 12 months",
-                "No run-out, no order; 1 000 / 60 = 16.7 months of cover → Overstocked",
+                "1 000 in stock, 12 months",
+                "No run-out, no order; 1 000 / 60 = 16.7 months of cover → Overstocked",
             ],
         ],
         columns=["Test", "Setup", "Expected result"],

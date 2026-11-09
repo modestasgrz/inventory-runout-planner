@@ -108,7 +108,6 @@ st.caption(
 )
 factor_flags = {
     "lead time": "Lead time: an order placed now arrives after the run-out",
-    "budget": "Budget: suggested order not funded",
 }
 flag_rows = [
     {"Product": p.description, "Code": p.stock_code, "Flag": flag}
@@ -116,6 +115,7 @@ flag_rows = [
     for flag in (
         [factor_flags[p.limiting_factor]] if p.limiting_factor in factor_flags else []
     )
+    + (["Budget: suggested order not funded"] if p.order and not p.order.funded else [])
     + p.flags
 ]
 st.dataframe(

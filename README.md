@@ -27,7 +27,7 @@ The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier
 | Funded / suggested spend | £99 993 / £124 083 | £99 984 / £162 296 | £99 772 / £127 909 | £49 834 / £124 083 | £94 251 / £111 367 |
 | Unfunded orders | 5 | 14 | 8 | 24 | 1 |
 
-A +3-week supplier delay pushes the open purchase order for JUMBO BAG RED RETROSPOT (85099B) from January into February, so the product runs out in January. The table above is where a buyer would spot that.
+A +3-week supplier delay pushes the open purchase order for JUMBO BAG RED RETROSPOT (85099B) from January into February, so the product runs out in January instead of after April. In the table it shows as products at risk jumping from 7 to 14; the Forecast page shows that product's projection month by month.
 
 ![Reorder plan](docs/screenshots/1440-reorder-plan.png)
 

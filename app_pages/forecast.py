@@ -52,7 +52,8 @@ figure.add_scatter(
     name="Stock, do nothing",
     line={"color": theme.RED},
 )
-if p.order and p.order.funded:
+order_lands = p.order is not None and p.order.funded and p.plan_months != p.months
+if order_lands:
     figure.add_scatter(
         x=forecast_x,
         y=[r.closing for r in p.plan_months],
@@ -106,10 +107,15 @@ st.dataframe(
     width="stretch",
     height=35 * len(p.months) + 38,
 )
-with st.expander("Projection with the suggested order (if funded)"):
-    st.dataframe(
-        table(p.plan_months),
-        hide_index=True,
-        width="stretch",
-        height=35 * len(p.plan_months) + 38,
+if order_lands:
+    with st.expander("Projection with the next order"):
+        st.dataframe(
+            table(p.plan_months),
+            hide_index=True,
+            width="stretch",
+            height=35 * len(p.plan_months) + 38,
+        )
+elif p.order:
+    st.caption(
+        "The next order is not funded or arrives after the horizon, so the projection with it is the same as above."
     )

@@ -1,5 +1,5 @@
 import math
-from decimal import ROUND_HALF_UP, Decimal
+from fractions import Fraction
 
 from inventory_runout_planner.fmt import gbp, month, number, units
 from inventory_runout_planner.models import (
@@ -44,8 +44,9 @@ class Draft(BaseModel):
         )
 
 
-def half_up(value: float) -> int:
-    return int(Decimal(str(value)).quantize(Decimal(1), ROUND_HALF_UP))
+def half_up(value: Fraction) -> int:
+    """Exact half-up rounding; callers build value from str() of the inputs so float ties stay ties."""
+    return math.floor(value + Fraction(1, 2))
 
 
 def month_key(t: int) -> str:
@@ -62,11 +63,11 @@ def forecast(
     history: list[int], method: str, growth_pct: float, months: int
 ) -> list[int]:
     """DEC-07: months 1..months; history is the 24 values oldest first, so history[-12] is Dec 2010."""
-    factor = 1 + growth_pct / 100
+    factor = 1 + Fraction(str(growth_pct)) / 100
     if method == "seasonal_naive":
-        base = [float(history[-12 + (t % 12)]) for t in range(months)]
+        base = [Fraction(history[-12 + (t % 12)]) for t in range(months)]
     else:
-        base = [sum(history[-3:]) / 3] * months
+        base = [Fraction(sum(history[-3:]), 3)] * months
     return [half_up(b * factor) for b in base]
 
 
@@ -109,7 +110,7 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
         arrivals = {inbound_t: p.inbound_qty} if inbound_t else {}
         extended = project(p.stock_on_hand, demand, arrivals)
         rows = extended[:horizon]
-        safety = [half_up(scenario.safety_months * d) for d in demand]
+        safety = [half_up(Fraction(str(scenario.safety_months)) * d) for d in demand]
         runout = next((t for t, r in enumerate(rows, start=1) if r.unmet > 0), None)
         trigger = next(
             (

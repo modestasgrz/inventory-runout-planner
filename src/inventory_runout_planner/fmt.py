@@ -5,7 +5,9 @@ NNBSP = " "
 
 
 def _rounded(value: float, places: int) -> Decimal:
-    return Decimal(str(value)).quantize(Decimal(1).scaleb(-places), ROUND_HALF_UP)
+    return (
+        Decimal(str(value)).quantize(Decimal(1).scaleb(-places), ROUND_HALF_UP) + 0
+    )  # + 0 turns -0 into 0
 
 
 def number(n: float) -> str:

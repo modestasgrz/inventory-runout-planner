@@ -12,7 +12,7 @@ def _rounded(value: float, places: int) -> Decimal:
 
 
 def number(n: float) -> str:
-    if not math.isfinite(n):
+    if math.isinf(n):
         return "∞"
     return f"{_rounded(n, 0):,.0f}".replace(",", NNBSP)
 

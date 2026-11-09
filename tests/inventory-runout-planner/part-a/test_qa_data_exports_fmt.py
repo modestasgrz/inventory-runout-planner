@@ -285,7 +285,7 @@ def test_load_invalid_product_row_is_data_error(
 
 def test_load_missing_column_in_products_is_data_error(tmp_path: Path) -> None:
     write_data(tmp_path, DEMAND_HEAD + pad("1"), "stock_code,description\n1,A\n")
-    with pytest.raises(DataError, match="products_synthetic.csv: invalid"):
+    with pytest.raises(DataError, match="products_synthetic.csv: missing column"):
         load(tmp_path)
 
 
@@ -319,7 +319,7 @@ def test_load_bad_units(tmp_path: Path, bad: str) -> None:
     write_data(tmp_path, DEMAND_HEAD + rows, PROD_HEADER + "\n" + OK_ROW + "\n")
     with pytest.raises(
         DataError,
-        match="demand_monthly.csv: units must be whole numbers ≥ 0|Data file unreadable",
+        match="demand_monthly.csv: units must be whole numbers from 0 to 10000000",
     ):
         load(tmp_path)
 
@@ -365,7 +365,7 @@ def test_load_missing_units_column_is_unreadable(tmp_path: Path) -> None:
         "stock_code,description,group,month\n1,A,g,2011-11\n",
         PROD_HEADER + "\n" + OK_ROW + "\n",
     )
-    with pytest.raises(DataError, match="Data file unreadable: KeyError"):
+    with pytest.raises(DataError, match="demand_monthly.csv: missing column units"):
         load(tmp_path)
 
 
@@ -375,9 +375,10 @@ def test_load_empty_demand_file_is_data_error(tmp_path: Path) -> None:
         load(tmp_path)
 
 
-def test_load_empty_products_file_gives_no_products(tmp_path: Path) -> None:
+def test_load_empty_products_file_is_data_error(tmp_path: Path) -> None:
     write_data(tmp_path, DEMAND_HEAD + pad("1"), PROD_HEADER + "\n")
-    assert load(tmp_path).products == []
+    with pytest.raises(DataError, match="products_synthetic.csv: no products"):
+        load(tmp_path)
 
 
 def test_load_unicode_description(tmp_path: Path) -> None:
@@ -691,4 +692,44 @@ def test_group_rule_first_match_wins(desc: str, grp: str) -> None:
 def test_number_non_finite_is_infinity_sign() -> None:
     assert number(float("inf")) == "∞"
     assert number(float("-inf")) == "∞"
-    assert number(float("nan")) == "∞"
+
+
+@pytest.mark.parametrize(
+    ("demand", "message"),
+    [
+        (DEMAND_HEAD + pad("1") + "1,A,g,,1\n", "blank stock_code or month"),
+        (DEMAND_HEAD + pad("1") + ",A,g,2011-11,1\n", "blank stock_code or month"),
+        (
+            "stock_code,description,group,mnth,units\n1,A,g,2011-11,1\n",
+            "missing column month",
+        ),
+        (
+            DEMAND_HEAD + pad("1").replace(",1\n", ",10000000000000000000\n", 1),
+            "units must be whole numbers from 0 to 10000000",
+        ),
+    ],
+)
+def test_load_round2_demand_holes_are_data_errors(
+    tmp_path: Path, demand: str, message: str
+) -> None:
+    write_data(tmp_path, demand, PROD_HEADER + "\n" + OK_ROW + "\n")
+    with pytest.raises(DataError, match=message):
+        load(tmp_path)
+
+
+def test_load_products_without_stock_code_column(tmp_path: Path) -> None:
+    write_data(
+        tmp_path,
+        DEMAND_HEAD + pad("1"),
+        PROD_HEADER.replace("stock_code", "code") + "\n" + OK_ROW + "\n",
+    )
+    with pytest.raises(
+        DataError, match="products_synthetic.csv: missing column stock_code"
+    ):
+        load(tmp_path)
+
+
+def test_load_unreadable_file_is_named(tmp_path: Path) -> None:
+    write_data(tmp_path, DEMAND_HEAD + pad("1"), "")
+    with pytest.raises(DataError, match="products_synthetic.csv: unreadable"):
+        load(tmp_path)

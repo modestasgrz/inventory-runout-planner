@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 DEMAND_FILE = "demand_monthly.csv"
 PRODUCTS_FILE = "products_synthetic.csv"
+DEMAND_COLUMNS = ["stock_code", "description", "group", "month", "units"]
+MAX_UNITS = 10_000_000
 HISTORY_MONTHS = (
     ["2009-12"]
     + [f"2010-{m:02d}" for m in range(1, 13)]
@@ -23,20 +25,40 @@ def load(data_dir: Path) -> PlannerData:
     for name in (DEMAND_FILE, PRODUCTS_FILE):
         if not (data_dir / name).is_file():
             raise DataError(f"Data file not found: {name}")
-    try:
-        demand = pd.read_csv(
-            data_dir / DEMAND_FILE, dtype={"stock_code": str, "month": str}
+    frames = {}
+    for name in (DEMAND_FILE, PRODUCTS_FILE):
+        try:
+            frames[name] = pd.read_csv(
+                data_dir / name, dtype={"stock_code": str, "month": str}
+            )
+        except (ValueError, pd.errors.ParserError) as e:
+            raise DataError(f"{name}: unreadable ({type(e).__name__})") from e
+    demand, table = frames[DEMAND_FILE], frames[PRODUCTS_FILE]
+    for name, frame, columns in (
+        (DEMAND_FILE, demand, DEMAND_COLUMNS),
+        (PRODUCTS_FILE, table, list(Product.model_fields)),
+    ):
+        missing_columns = [c for c in columns if c not in frame.columns]
+        if missing_columns:
+            raise DataError(f"{name}: missing column {missing_columns[0]}")
+    if demand[["stock_code", "month"]].isna().any().any():
+        raise DataError(f"{DEMAND_FILE}: blank stock_code or month")
+    units = pd.to_numeric(demand["units"], errors="coerce")
+    if (
+        units.isna().any()
+        or (units < 0).any()
+        or (units > MAX_UNITS).any()
+        or not (units % 1 == 0).all()
+    ):
+        raise DataError(
+            f"{DEMAND_FILE}: units must be whole numbers from 0 to {MAX_UNITS}"
         )
-        table = pd.read_csv(data_dir / PRODUCTS_FILE, dtype={"stock_code": str})
-        units = pd.to_numeric(demand["units"], errors="raise")
-    except (ValueError, KeyError, pd.errors.ParserError) as e:
-        raise DataError(f"Data file unreadable: {type(e).__name__}") from e
-    if units.isna().any() or (units < 0).any() or not (units % 1 == 0).all():
-        raise DataError(f"{DEMAND_FILE}: units must be whole numbers ≥ 0")
     if demand.duplicated(["stock_code", "month"]).any():
         raise DataError(f"{DEMAND_FILE}: duplicate product + month rows")
     if sorted(demand["month"].unique()) != HISTORY_MONTHS:
         raise DataError(f"{DEMAND_FILE}: months must be exactly 2009-12 to 2011-11")
+    if table.empty:
+        raise DataError(f"{PRODUCTS_FILE}: no products")
     if table["stock_code"].duplicated().any():
         raise DataError(f"{PRODUCTS_FILE}: duplicate stock codes")
     demand["units"] = units.astype(int)

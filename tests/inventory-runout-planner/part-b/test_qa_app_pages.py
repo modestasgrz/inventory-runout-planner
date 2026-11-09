@@ -1,4 +1,5 @@
 import html
+import json
 import shutil
 from pathlib import Path
 from typing import Any
@@ -283,7 +284,8 @@ def test_forecast_picker_lists_all_products_and_each_renders() -> None:
         at.selectbox(key="product").select(option).run()
         assert not at.exception, option
         assert len(at.dataframe) >= 1
-        assert option in md(at) or len(at.dataframe) == 2
+        spec = json.loads(at.get("plotly_chart")[0].proto.spec)
+        assert spec["layout"]["title"]["text"].startswith(option)
 
 
 def test_forecast_table_rows_follow_horizon() -> None:

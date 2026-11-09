@@ -1,6 +1,6 @@
 import itertools
-import random
 
+import numpy as np
 import pytest
 from inventory_runout_planner.models import (
     PlannerData,
@@ -17,6 +17,14 @@ MONTHS = (
     + [f"2010-{m:02d}" for m in range(1, 13)]
     + [f"2011-{m:02d}" for m in range(1, 12)]
 )
+
+
+def ri(rng: np.random.Generator, low: int, high: int) -> int:
+    return int(rng.integers(low, high + 1))
+
+
+def pick[T](rng: np.random.Generator, options: list[T]) -> T:
+    return options[int(rng.integers(len(options)))]
 
 
 def prod(code: str = "T1", **kw: float) -> Product:
@@ -185,12 +193,14 @@ def test_scenario_errors_numeric_strings_and_extra_keys() -> None:
 
 @pytest.mark.parametrize("seed", range(30))
 def test_scenario_errors_agree_with_model(seed: int) -> None:
-    rng = random.Random(seed)
+    rng = np.random.default_rng(seed)
     raw: dict[str, float | int | str] = {
-        "growth_pct": rng.choice([-51, -50, 0, 100, 101, rng.uniform(-60, 110)]),
-        "delay_weeks": rng.choice([-1, 0, 26, 27, rng.randint(-3, 30)]),
-        "budget_gbp": rng.choice([-1, 0, 1_000_000, 1_000_001, rng.uniform(-5, 2e6)]),
-        "safety_months": rng.choice([-1, 0, 6, 7, rng.uniform(-1, 8)]),
+        "growth_pct": pick(rng, [-51, -50, 0, 100, 101, float(rng.uniform(-60, 110))]),
+        "delay_weeks": pick(rng, [-1, 0, 26, 27, ri(rng, -3, 30)]),
+        "budget_gbp": pick(
+            rng, [-1, 0, 1_000_000, 1_000_001, float(rng.uniform(-5, 2e6))]
+        ),
+        "safety_months": pick(rng, [-1, 0, 6, 7, float(rng.uniform(-1, 8))]),
     }
     errors = scenario_errors(raw)
     try:
@@ -373,3 +383,24 @@ def test_lead_months_table() -> None:
     cases = {0: 0, 1: 1, 4: 1, 5: 2, 8: 2, 9: 3, 13: 3, 14: 4, 38: 9}
     for weeks, months in cases.items():
         assert lead_months(weeks) == months, weeks
+
+
+def test_scenario_errors_non_numeric_text_echoed() -> None:
+    raw: dict[str, float | int | str] = {
+        "growth_pct": "abc",
+        "delay_weeks": 0,
+        "budget_gbp": "",
+        "safety_months": "1,5",
+    }
+    assert scenario_errors(raw) == [
+        "Demand growth (%) must be between -50 and 100 — you entered abc.",
+        "Budget (£) must be between 0 and 1 000 000 — you entered .",
+        "Safety stock (months) must be between 0 and 6 — you entered 1,5.",
+    ]
+
+
+def test_zero_forecast_with_stock_flags_no_forecast_demand() -> None:
+    r = go(prod(stock_on_hand=10), demand=0)
+    p = r.products[0]
+    assert p.cover_months == float("inf")
+    assert "Overstocked: no forecast demand" in p.flags

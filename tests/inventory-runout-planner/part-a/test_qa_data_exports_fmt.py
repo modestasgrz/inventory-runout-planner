@@ -1,10 +1,10 @@
 import importlib.util
 import math
-import random
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from inventory_runout_planner.data import DataError, load
@@ -21,7 +21,6 @@ from inventory_runout_planner.models import (
 from inventory_runout_planner.planner import run
 from inventory_runout_planner.presets import BASELINE, PRESETS
 from inventory_runout_planner.synthetic import generate, round_up
-from pydantic import ValidationError
 
 REPO = Path(__file__).resolve().parents[3]
 DATA = REPO / "data"
@@ -42,6 +41,14 @@ PROD_HEADER = ",".join(PRODUCT_COLS)
 
 
 # ---------- fmt ----------
+
+
+def ri(rng: np.random.Generator, low: int, high: int) -> int:
+    return int(rng.integers(low, high + 1))
+
+
+def pick[T](rng: np.random.Generator, options: list[T]) -> T:
+    return options[int(rng.integers(len(options)))]
 
 
 def test_number_rounding_and_zero() -> None:
@@ -132,9 +139,9 @@ def test_month_all_twelve_and_errors() -> None:
 
 
 def test_fmt_roundtrip_property() -> None:
-    rng = random.Random(1)
+    rng = np.random.default_rng(1)
     for _ in range(300):
-        v = rng.randint(-10_000_000, 10_000_000) / rng.choice([1, 10, 100])
+        v = ri(rng, -10_000_000, 10_000_000) / pick(rng, [1, 10, 100])
         digits = number(v).replace(N, "")
         assert int(digits) == int(Decimal(str(v)).to_integral_value("ROUND_HALF_UP"))
         pence = gbp(v, pence=True)
@@ -146,20 +153,30 @@ def test_fmt_roundtrip_property() -> None:
 # ---------- data.load ----------
 
 
+ALL_MONTHS = (
+    ["2009-12"]
+    + [f"2010-{m:02d}" for m in range(1, 13)]
+    + [f"2011-{m:02d}" for m in range(1, 12)]
+)
+DEMAND_HEAD = "stock_code,description,group,month,units\n"
+OK_ROW = "1,A,g,1.0,1,1,1,1,0,0"
+
+
+def pad(code: str = "PAD") -> str:
+    """One row per month so the file covers all 24 months."""
+    return "".join(f"{code},P,g,{m},1\n" for m in ALL_MONTHS)
+
+
 def write_data(tmp: Path, demand: str, products: str) -> Path:
     (tmp / "demand_monthly.csv").write_text(demand)
     (tmp / "products_synthetic.csv").write_text(products)
     return tmp
 
 
-DEMAND_HEAD = "stock_code,description,group,month,units\n"
-
-
 def test_load_real_data_shape() -> None:
     d = load(DATA)
     assert len(d.products) == 36
-    assert len(d.history_months) == 24
-    assert d.history_months == sorted(d.history_months)
+    assert d.history_months == ALL_MONTHS
     assert all(len(v) == 24 for v in d.history.values())
     assert {p.stock_code for p in d.products} == set(d.history)
     assert all(isinstance(c, str) for c in d.history)
@@ -167,6 +184,12 @@ def test_load_real_data_shape() -> None:
 
 def test_load_empty_folder_names_demand_first(tmp_path: Path) -> None:
     with pytest.raises(DataError, match="Data file not found: demand_monthly.csv"):
+        load(tmp_path)
+
+
+def test_load_missing_products_file(tmp_path: Path) -> None:
+    (tmp_path / "demand_monthly.csv").write_text(DEMAND_HEAD + pad())
+    with pytest.raises(DataError, match="Data file not found: products_synthetic.csv"):
         load(tmp_path)
 
 
@@ -178,14 +201,14 @@ def test_load_missing_data_dir(tmp_path: Path) -> None:
 def test_load_directory_in_place_of_file(tmp_path: Path) -> None:
     (tmp_path / "demand_monthly.csv").mkdir()
     (tmp_path / "products_synthetic.csv").write_text(PROD_HEADER + "\n")
-    with pytest.raises(DataError, match="demand_monthly.csv"):
+    with pytest.raises(DataError, match="Data file not found: demand_monthly.csv"):
         load(tmp_path)
 
 
 def test_load_missing_history_lists_every_code(tmp_path: Path) -> None:
     write_data(
         tmp_path,
-        DEMAND_HEAD + "111,A,g,2011-11,5\n",
+        DEMAND_HEAD + pad("111"),
         PROD_HEADER
         + "\n111,A,g,1.0,1,1,1,1,0,0\n222,B,g,1.0,1,1,1,1,0,0\n333,C,g,1.0,1,1,1,1,0,0\n",
     )
@@ -196,7 +219,7 @@ def test_load_missing_history_lists_every_code(tmp_path: Path) -> None:
 def test_load_preserves_alphanumeric_and_leading_zero_codes(tmp_path: Path) -> None:
     write_data(
         tmp_path,
-        DEMAND_HEAD + "00123,A,g,2011-11,5\n85123A,B,g,2011-11,7\n",
+        DEMAND_HEAD + pad("00123") + pad("85123A"),
         PROD_HEADER + "\n00123,A,g,1.0,1,1,1,1,0,0\n85123A,B,g,1.0,1,1,1,1,0,0\n",
     )
     d = load(tmp_path)
@@ -207,62 +230,160 @@ def test_load_preserves_alphanumeric_and_leading_zero_codes(tmp_path: Path) -> N
 def test_load_fills_missing_months_with_zero(tmp_path: Path) -> None:
     write_data(
         tmp_path,
-        DEMAND_HEAD + "1,A,g,2011-09,5\n1,A,g,2011-11,8\n2,B,g,2011-10,3\n",
+        DEMAND_HEAD
+        + pad("PAD")
+        + "1,A,g,2011-09,5\n1,A,g,2011-11,8\n2,B,g,2011-10,3\n",
         PROD_HEADER + "\n1,A,g,1.0,1,1,1,1,0,0\n2,B,g,1.0,1,1,1,1,0,0\n",
     )
     d = load(tmp_path)
-    assert d.history_months == ["2011-09", "2011-10", "2011-11"]
-    assert d.history == {"1": [5, 0, 8], "2": [0, 3, 0]}
+    assert d.history["1"] == [0] * 21 + [5, 0, 8]
+    assert d.history["2"] == [0] * 22 + [3, 0]
+    assert d.history_months == ALL_MONTHS
 
 
 def test_load_unsorted_rows_are_sorted_by_month(tmp_path: Path) -> None:
+    rows = [f"1,A,g,{m},{i}\n" for i, m in enumerate(ALL_MONTHS)]
+    rows = [rows[i] for i in np.random.default_rng(3).permutation(len(rows))]
     write_data(
         tmp_path,
-        DEMAND_HEAD + "1,A,g,2011-11,8\n1,A,g,2011-09,5\n1,A,g,2011-10,6\n",
-        PROD_HEADER + "\n1,A,g,1.0,1,1,1,1,0,0\n",
+        DEMAND_HEAD + "".join(rows),
+        PROD_HEADER + "\n" + OK_ROW + "\n",
     )
-    assert load(tmp_path).history["1"] == [5, 6, 8]
+    assert load(tmp_path).history["1"] == list(range(24))
+
+
+def good_dir(tmp: Path, product_row: str = OK_ROW) -> Path:
+    return write_data(
+        tmp, DEMAND_HEAD + pad("1"), PROD_HEADER + "\n" + product_row + "\n"
+    )
+
+
+def test_load_good_minimal_dir(tmp_path: Path) -> None:
+    d = load(good_dir(tmp_path))
+    assert d.history["1"] == [1] * 24
 
 
 @pytest.mark.parametrize(
-    "row",
+    ("row", "field"),
     [
-        "1,A,g,0,1,1,1,1,0,0",  # unit_cost 0
-        "1,A,g,1.0,-1,1,1,1,0,0",  # negative stock
-        "1,A,g,1.0,1,13,1,1,0,0",  # lead 13
-        "1,A,g,1.0,1,1,0,1,0,0",  # moq 0
-        "1,A,g,1.0,1,1,1,0,0,0",  # capacity 0
-        "1,A,g,1.0,1.5,1,1,1,0,0",  # fractional stock
+        ("1,A,g,0,1,1,1,1,0,0", "unit_cost"),
+        ("1,A,g,1.0,-1,1,1,1,0,0", "stock_on_hand"),
+        ("1,A,g,1.0,1,13,1,1,0,0", "lead_time_weeks"),
+        ("1,A,g,1.0,1,1,0,1,0,0", "moq"),
+        ("1,A,g,1.0,1,1,1,0,0,0", "capacity"),
+        ("1,A,g,1.0,1.5,1,1,1,0,0", "stock_on_hand"),
+        ("1,A,g,1.0,1,1,1,1,-1,0", "inbound_qty"),
+        ("1,A,g,1.0,1,1,1,1,0,-2", "inbound_weeks"),
     ],
 )
-def test_load_rejects_invalid_product_rows(tmp_path: Path, row: str) -> None:
-    write_data(
-        tmp_path, DEMAND_HEAD + "1,A,g,2011-11,5\n", PROD_HEADER + "\n" + row + "\n"
-    )
-    with pytest.raises(ValidationError):
+def test_load_invalid_product_row_is_data_error(
+    tmp_path: Path, row: str, field: str
+) -> None:
+    with pytest.raises(DataError, match=f"products_synthetic.csv: invalid {field}"):
+        load(good_dir(tmp_path, row))
+
+
+def test_load_missing_column_in_products_is_data_error(tmp_path: Path) -> None:
+    write_data(tmp_path, DEMAND_HEAD + pad("1"), "stock_code,description\n1,A\n")
+    with pytest.raises(DataError, match="products_synthetic.csv: invalid"):
         load(tmp_path)
 
 
-def test_load_missing_column_in_products(tmp_path: Path) -> None:
+def test_load_duplicate_product_codes(tmp_path: Path) -> None:
     write_data(
         tmp_path,
-        DEMAND_HEAD + "1,A,g,2011-11,5\n",
-        "stock_code,description\n1,A\n",
+        DEMAND_HEAD + pad("1"),
+        PROD_HEADER + "\n" + OK_ROW + "\n" + OK_ROW + "\n",
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(
+        DataError, match="products_synthetic.csv: duplicate stock codes"
+    ):
+        load(tmp_path)
+
+
+def test_load_duplicate_demand_rows(tmp_path: Path) -> None:
+    write_data(
+        tmp_path,
+        DEMAND_HEAD + pad("1") + "1,A,g,2011-11,9\n",
+        PROD_HEADER + "\n" + OK_ROW + "\n",
+    )
+    with pytest.raises(
+        DataError, match="demand_monthly.csv: duplicate product \\+ month rows"
+    ):
+        load(tmp_path)
+
+
+@pytest.mark.parametrize("bad", ["-1", "1.5", "", "abc", "nan"])
+def test_load_bad_units(tmp_path: Path, bad: str) -> None:
+    rows = pad("1").replace("2011-11,1", f"2011-11,{bad}")
+    write_data(tmp_path, DEMAND_HEAD + rows, PROD_HEADER + "\n" + OK_ROW + "\n")
+    with pytest.raises(
+        DataError,
+        match="demand_monthly.csv: units must be whole numbers ≥ 0|Data file unreadable",
+    ):
+        load(tmp_path)
+
+
+def test_load_whole_number_float_units_accepted(tmp_path: Path) -> None:
+    rows = pad("1").replace("2011-11,1", "2011-11,7.0")
+    write_data(tmp_path, DEMAND_HEAD + rows, PROD_HEADER + "\n" + OK_ROW + "\n")
+    assert load(tmp_path).history["1"][-1] == 7
+
+
+def test_load_units_zero_is_valid(tmp_path: Path) -> None:
+    rows = pad("1").replace("2011-11,1", "2011-11,0")
+    write_data(tmp_path, DEMAND_HEAD + rows, PROD_HEADER + "\n" + OK_ROW + "\n")
+    assert load(tmp_path).history["1"][-1] == 0
+
+
+def test_load_missing_month_in_whole_file(tmp_path: Path) -> None:
+    rows = "".join(f"1,A,g,{m},1\n" for m in ALL_MONTHS[:-1])
+    write_data(tmp_path, DEMAND_HEAD + rows, PROD_HEADER + "\n" + OK_ROW + "\n")
+    with pytest.raises(DataError, match="months must be exactly 2009-12 to 2011-11"):
+        load(tmp_path)
+
+
+def test_load_extra_month_in_file(tmp_path: Path) -> None:
+    write_data(
+        tmp_path,
+        DEMAND_HEAD + pad("1") + "1,A,g,2011-12,1\n",
+        PROD_HEADER + "\n" + OK_ROW + "\n",
+    )
+    with pytest.raises(DataError, match="months must be exactly 2009-12 to 2011-11"):
+        load(tmp_path)
+
+
+def test_load_header_only_demand_file(tmp_path: Path) -> None:
+    write_data(tmp_path, DEMAND_HEAD, PROD_HEADER + "\n" + OK_ROW + "\n")
+    with pytest.raises(DataError):
+        load(tmp_path)
+
+
+def test_load_missing_units_column_is_unreadable(tmp_path: Path) -> None:
+    write_data(
+        tmp_path,
+        "stock_code,description,group,month\n1,A,g,2011-11\n",
+        PROD_HEADER + "\n" + OK_ROW + "\n",
+    )
+    with pytest.raises(DataError, match="Data file unreadable: KeyError"):
+        load(tmp_path)
+
+
+def test_load_empty_demand_file_is_data_error(tmp_path: Path) -> None:
+    write_data(tmp_path, "", PROD_HEADER + "\n" + OK_ROW + "\n")
+    with pytest.raises(DataError):
         load(tmp_path)
 
 
 def test_load_empty_products_file_gives_no_products(tmp_path: Path) -> None:
-    write_data(tmp_path, DEMAND_HEAD + "1,A,g,2011-11,5\n", PROD_HEADER + "\n")
-    d = load(tmp_path)
-    assert d.products == []
+    write_data(tmp_path, DEMAND_HEAD + pad("1"), PROD_HEADER + "\n")
+    assert load(tmp_path).products == []
 
 
 def test_load_unicode_description(tmp_path: Path) -> None:
     write_data(
         tmp_path,
-        DEMAND_HEAD + '1,"CAFÉ ☕ MUG, BLUE",g,2011-11,5\n',
+        DEMAND_HEAD + pad("1"),
         PROD_HEADER + '\n1,"CAFÉ ☕ MUG, BLUE",g,1.0,1,1,1,1,0,0\n',
     )
     assert load(tmp_path).products[0].description == "CAFÉ ☕ MUG, BLUE"
@@ -565,3 +686,9 @@ def group_of(description: str) -> str:
 )
 def test_group_rule_first_match_wins(desc: str, grp: str) -> None:
     assert group_of(desc) == grp
+
+
+def test_number_non_finite_is_infinity_sign() -> None:
+    assert number(float("inf")) == "∞"
+    assert number(float("-inf")) == "∞"
+    assert number(float("nan")) == "∞"

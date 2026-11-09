@@ -1,7 +1,7 @@
 import math
-import random
 from fractions import Fraction
 
+import numpy as np
 import pytest
 from inventory_runout_planner.models import (
     MonthRow,
@@ -20,52 +20,60 @@ MONTHS = (
 SEEDS = list(range(40))
 
 
+def ri(rng: np.random.Generator, low: int, high: int) -> int:
+    return int(rng.integers(low, high + 1))
+
+
+def pick[T](rng: np.random.Generator, options: list[T]) -> T:
+    return options[int(rng.integers(len(options)))]
+
+
 def half_up_exact(x: Fraction) -> int:
     return math.floor(x + Fraction(1, 2))
 
 
-def rand_product(rng: random.Random, i: int) -> Product:
-    stock = rng.choice([0, 1, rng.randint(0, 3000)])
-    inbound = rng.choice([0, 0, rng.randint(1, 1500)])
+def rand_product(rng: np.random.Generator, i: int) -> Product:
+    stock = pick(rng, [0, 1, ri(rng, 0, 3000)])
+    inbound = pick(rng, [0, 0, ri(rng, 1, 1500)])
     return Product(
         stock_code=f"P{i:03d}",
         description=f"Toy {i}",
         group="Gifts & small goods",
-        unit_cost=round(rng.uniform(0.01, 40), 2),
+        unit_cost=round(float(rng.uniform(0.01, 40)), 2),
         stock_on_hand=stock,
-        lead_time_weeks=rng.randint(0, 12),
-        moq=rng.choice([1, 50, rng.randint(1, 400)]),
-        capacity=rng.choice([1, rng.randint(1, 3000), 5000]),
+        lead_time_weeks=ri(rng, 0, 12),
+        moq=pick(rng, [1, 50, ri(rng, 1, 400)]),
+        capacity=pick(rng, [1, ri(rng, 1, 3000), 5000]),
         inbound_qty=inbound,
-        inbound_weeks=rng.randint(0, 30) if inbound else 0,
+        inbound_weeks=ri(rng, 0, 30) if inbound else 0,
     )
 
 
-def rand_history(rng: random.Random) -> list[int]:
-    kind = rng.choice(["zero", "flat", "random", "sparse"])
+def rand_history(rng: np.random.Generator) -> list[int]:
+    kind = pick(rng, ["zero", "flat", "random", "sparse"])
     if kind == "zero":
         return [0] * 24
     if kind == "flat":
-        return [rng.randint(1, 300)] * 24
+        return [ri(rng, 1, 300)] * 24
     if kind == "sparse":
-        return [rng.choice([0, 0, rng.randint(1, 800)]) for _ in range(24)]
-    return [rng.randint(0, 600) for _ in range(24)]
+        return [pick(rng, [0, 0, ri(rng, 1, 800)]) for _ in range(24)]
+    return [ri(rng, 0, 600) for _ in range(24)]
 
 
-def rand_scenario(rng: random.Random) -> Scenario:
+def rand_scenario(rng: np.random.Generator) -> Scenario:
     return Scenario(
-        horizon_months=rng.randint(6, 12),
-        growth_pct=rng.choice([-50, 0, 100, rng.randint(-50, 100), 12.5]),
-        delay_weeks=rng.choice([0, 26, rng.randint(0, 26)]),
-        budget_gbp=rng.choice([0, 1_000_000, rng.randint(0, 20000)]),
-        safety_months=rng.choice([0, 6, 0.5, 1, rng.randint(0, 12) / 2]),
-        method=rng.choice(["seasonal_naive", "trailing_3m"]),
+        horizon_months=ri(rng, 6, 12),
+        growth_pct=pick(rng, [-50, 0, 100, ri(rng, -50, 100), 12.5]),
+        delay_weeks=pick(rng, [0, 26, ri(rng, 0, 26)]),
+        budget_gbp=pick(rng, [0, 1_000_000, ri(rng, 0, 20000)]),
+        safety_months=pick(rng, [0, 6, 0.5, 1, ri(rng, 0, 12) / 2]),
+        method=pick(rng, ["seasonal_naive", "trailing_3m"]),
     )
 
 
 def world(seed: int) -> tuple[PlannerData, Scenario]:
-    rng = random.Random(seed)
-    products = [rand_product(rng, i) for i in range(rng.randint(1, 8))]
+    rng = np.random.default_rng(seed)
+    products = [rand_product(rng, i) for i in range(ri(rng, 1, 8))]
     data = PlannerData(
         products=products,
         history={p.stock_code: rand_history(rng) for p in products},

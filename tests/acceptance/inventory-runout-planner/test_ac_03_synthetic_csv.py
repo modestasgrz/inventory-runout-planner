@@ -18,7 +18,7 @@ def test_ac_03_synthetic_csv() -> None:
     assert sorted(products["stock_code"]) == sorted(set(demand["stock_code"]))
     rows = [Product.model_validate(r) for r in products.to_dict("records")]
     history = {
-        code: g.sort_values("month")["units"].astype(int).tolist()
+        str(code): g.sort_values("month")["units"].astype(int).tolist()
         for code, g in demand.groupby("stock_code")
     }
     price_map = dict(

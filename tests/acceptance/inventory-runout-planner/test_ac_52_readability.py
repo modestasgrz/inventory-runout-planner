@@ -37,7 +37,7 @@ def test_ac_52_readability() -> None:
         if p.order_now
     ]
     assert list(table["Funded"]) == wanted
-    charts: list[Any] = at.get("plotly_chart")
+    charts: Any = at.get("plotly_chart")
     titles = [str(c.proto.spec) for c in charts]
     assert any('"text":"products"' in t.replace(" ", "") for t in titles)
     for page in PAGES[1:]:

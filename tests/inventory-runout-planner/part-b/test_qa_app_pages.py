@@ -67,11 +67,15 @@ INVALID = [
         -1,
         "Supplier delay (weeks) must be between 0 and 26 — you entered -1.",
     ),
-    ("budget_gbp", -1, "Budget (£) must be between 0 and 1 000 000 — you entered -1."),
+    (
+        "budget_gbp",
+        -1,
+        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered -1.",
+    ),
     (
         "budget_gbp",
         2_000_000,
-        "Budget (£) must be between 0 and 1 000 000 — you entered 2 000 000.",
+        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered 2 000 000.",
     ),
     (
         "safety_months",
@@ -202,7 +206,7 @@ def test_multiple_invalid_inputs_list_all_in_order() -> None:
     assert [m.split(" must")[0] for m in msgs] == [
         "Demand growth (%)",
         "Supplier delay (weeks)",
-        "Budget (£)",
+        "Purchase budget (£, whole horizon)",
         "Safety stock (months)",
     ]
     assert len(at.metric) == 0

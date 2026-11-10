@@ -44,9 +44,9 @@ Full detail on the Methodology page and in [`specs/inventory-runout-planner.md`]
 
 ## Tests
 
-- 37 acceptance tests, one per acceptance criterion in the spec, including 8 hand-calculated cases (e.g. 100 units in stock, 60 a month, lead time 4 weeks → runs out Jan 2012, order 200 units = 180 + 60 − 40, £400.00).
+- 40 acceptance tests, one per acceptance criterion in the spec, including 8 hand-calculated cases (e.g. 100 units in stock, 60 a month, lead time 4 weeks → runs out Jan 2012, order 200 units = 180 + 60 − 40, £400.00).
 - 341 unit tests on the calculation core: property tests over random products and scenarios (stock is conserved, never negative, spend ≤ budget, ranking order), every input boundary, data-file error paths, exact half-up rounding.
-- 73 more Streamlit `AppTest` checks on top of the acceptance tests: every page renders, the KPI cards match across all 5 pages, presets move the KPIs, Reset restores them, bad input shows the error, missing data files show a clear message.
+- 229 more Streamlit `AppTest` checks on top of the acceptance tests: every page renders, the KPI cards match across all 5 pages, presets move the KPIs, Reset restores them, bad input shows the error, missing data files show a clear message.
 
 ## Run it yourself
 

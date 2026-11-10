@@ -69,8 +69,11 @@ def toy_data(
     )
 
 
-def one(p: Product, **scenario_overrides: Any) -> ProductResult:
-    return run(toy_data(p), toy_scenario(**scenario_overrides)).products[0]
+def one(p: Product, max_orders: int = 1, **scenario_overrides: Any) -> ProductResult:
+    """Hand cases keep one order per product unless a test asks for more (spec Change 4 note)."""
+    return run(
+        toy_data(p), toy_scenario(**scenario_overrides), max_orders=max_orders
+    ).products[0]
 
 
 def of(result: ScenarioResult, code: str) -> ProductResult:
@@ -117,7 +120,7 @@ def test_lead_time_arrival_inside_12_month_horizon() -> None:
 
 
 def test_unfunded_order_window_is_whole_horizon() -> None:
-    r = run(toy_data(toy("T0001")), toy_scenario(budget_gbp=300))
+    r = run(toy_data(toy("T0001")), toy_scenario(budget_gbp=300), max_orders=1)
     p = r.products[0]
     assert p.limiting_factor == "budget"
     assert p.order is not None and not p.order.funded and p.order.cost_gbp == 400.00
@@ -128,13 +131,28 @@ def test_unfunded_order_window_is_whole_horizon() -> None:
     assert r.kpis.unfunded_gbp == 400.00
     assert r.kpis.unfunded_orders == 1
     assert r.kpis.products_at_risk == 1
+    # 4 orders: the follow-up (£360) is planned on the projection with order 1 and is unfunded too (DEC-21)
+    r4 = run(toy_data(toy("T0001")), toy_scenario(budget_gbp=300))
+    assert [(x.order_no, x.funded) for x in r4.plan] == [(1, False), (2, False)]
+    assert r4.kpis.unfunded_gbp == 760.00
+    assert r4.kpis.unfunded_orders == 2
+    assert r4.products[0].lost_sales_after_plan_gbp == 1300.00
 
 
 def test_budget_exactly_equal_to_cost_funds_order() -> None:
+    """Order 1 alone covers Jan–Apr; May (60 units) stays short over the whole horizon (DEC-19 as amended)."""
     p = one(toy("T0001"), budget_gbp=400)
     assert p.order is not None and p.order.funded
-    assert p.lost_sales_after_plan_gbp == 0.00
-    assert not p.at_risk_after_plan
+    assert p.lost_sales_after_plan_gbp == 300.00
+    assert p.stockout_months == 1
+    assert p.at_risk_after_plan
+    both = one(toy("T0001"), max_orders=4, budget_gbp=760)
+    assert [o.funded for o in both.orders] == [True, True]
+    assert both.lost_sales_after_plan_gbp == 0.00
+    assert not both.at_risk_after_plan
+    penny = one(toy("T0001"), max_orders=4, budget_gbp=759.99)
+    assert [o.funded for o in penny.orders] == [True, False]
+    assert penny.orders[1].reason.endswith("Not funded: £359.99 left of budget.")
 
 
 def test_zero_budget_unfunded_gbp_is_total_suggested() -> None:
@@ -179,14 +197,20 @@ def test_one_month_stockout() -> None:
 
 
 def test_one_month_stockout_at_12_months_has_later_shortfall() -> None:
-    """e = min(12, 3 + 2) = 5; with-plan unmet Jun–Nov 2012 = 6 × 60."""
+    """One order (240, arrives Feb 2012) lasts to May; with-plan unmet = Jan 20 + Jun–Nov 2012 6 × 60, all in the
+    whole-horizon money; the short-after-plan part is outside the Jan stock-out window."""
     p = one(toy("S1", lead_time_weeks=5), horizon_months=12)
-    assert p.lost_sales_after_plan_gbp == 100.00
-    assert p.stockout_months == 1
+    assert p.stockout is not None and p.stockout.units == 20
+    assert p.lost_sales_after_plan_gbp == 1900.00
+    assert p.stockout_months == 7
     assert p.later_shortfall_units == 360
     assert p.later_shortfall_month == "2012-06"
     assert p.later_shortfall_gbp == 1800.00
-    assert f"Later shortfall not covered: {units(360)} from Jun 2012" in p.flags
+    assert (
+        p.lost_sales_after_plan_gbp == p.stockout.lost_sales_gbp + p.later_shortfall_gbp
+    )
+    assert f"Short after plan: {units(360)} from Jun 2012" in p.flags
+    assert not any(f.startswith("Later shortfall") for f in p.flags)
 
 
 def test_delay_preset_style_turns_stock_into_lead_time() -> None:
@@ -199,27 +223,43 @@ def test_delay_preset_style_turns_stock_into_lead_time() -> None:
 
 
 def test_growth_preset_style_hand_case() -> None:
-    """Growth 25 %: demand 75; qty 275 arrives Jan 2012, e = 4; May 2012 short 75."""
+    """Growth 25 %: demand 75; qty 275 (£550) arrives Jan 2012 and lasts to Apr; May 2012 short 75."""
     p = one(toy("T0001"), growth_pct=25)
     assert p.lost_sales_gbp == 1750.00
     assert p.order is not None and p.order.qty == 275 and p.order.funded
-    assert p.lost_sales_after_plan_gbp == 0.00
+    assert p.lost_sales_after_plan_gbp == 375.00
     assert p.later_shortfall_units == 75
     assert p.later_shortfall_month == "2012-05"
     assert p.later_shortfall_gbp == 375.00
-    assert not p.at_risk_after_plan
+    assert p.at_risk_after_plan
+    assert f"Short after plan: {units(75)} from May 2012" in p.flags
+    # follow-up: Mar closing 75 is not < safety 75, Apr closing 0 is -> order Mar, arrives Apr, 3 × 75 + 75 − 75 = 225
+    # (£450 = exactly the £450 left after order 1)
+    q = one(toy("T0001"), max_orders=4, growth_pct=25)
+    assert len(q.orders) == 2
+    second = q.orders[1]
+    assert (second.order_month, second.arrival_month, second.qty) == (
+        "2012-03",
+        "2012-04",
+        225,
+    )
+    assert second.cost_gbp == 450.00 and second.funded
+    assert q.lost_sales_after_plan_gbp == 0.00
+    assert not q.at_risk_after_plan
+    assert q.later_shortfall_units == 0
+    assert not any(f.startswith("Short after plan") for f in q.flags)
 
 
 @pytest.mark.parametrize(
-    ("horizon", "lost", "later_units", "later_gbp"),
-    [(6, 1300.00, 60, 300.00), (12, 3100.00, 420, 2100.00)],
+    ("horizon", "lost", "after", "later_units", "later_gbp"),
+    [(6, 1300.00, 300.00, 60, 300.00), (12, 3100.00, 2100.00, 420, 2100.00)],
 )
 def test_horizon_6_vs_12(
-    horizon: int, lost: float, later_units: int, later_gbp: float
+    horizon: int, lost: float, after: float, later_units: int, later_gbp: float
 ) -> None:
     p = one(toy("T0001"), horizon_months=horizon)
     assert p.lost_sales_gbp == lost
-    assert p.lost_sales_after_plan_gbp == 0.00
+    assert p.lost_sales_after_plan_gbp == after
     assert p.later_shortfall_units == later_units
     assert p.later_shortfall_month == "2012-05"
     assert p.later_shortfall_gbp == later_gbp
@@ -279,10 +319,13 @@ def test_tied_up_uses_unit_cost_not_sell_price() -> None:
 
 
 def test_lost_sales_use_sell_price_with_pennies() -> None:
-    p = run(toy_data(toy("P1"), prices={"P1": 0.85}), toy_scenario()).products[0]
+    p = run(
+        toy_data(toy("P1"), prices={"P1": 0.85}), toy_scenario(), max_orders=1
+    ).products[0]
     assert p.sell_price == 0.85
     assert p.lost_sales_gbp == round(260 * 0.85, 2) == 221.00
     assert p.later_shortfall_gbp == round(60 * 0.85, 2) == 51.00
+    assert p.lost_sales_after_plan_gbp == 51.00
 
 
 def test_inbound_inside_stockout_gap_counts_only_unmet() -> None:
@@ -365,6 +408,8 @@ def month_index(key: str) -> int:
 
 
 def check_dec19(data: PlannerData, result: ScenarioResult) -> None:
+    """DEC-19 as amended by Change 4: money and stock-out months over the whole horizon; short after plan only when
+    order 1 is funded, over months outside the stock-out window."""
     horizon = result.scenario.horizon_months
     by_code = {p.stock_code: p for p in data.products}
     for pr in result.products:
@@ -372,57 +417,64 @@ def check_dec19(data: PlannerData, result: ScenarioResult) -> None:
         price = data.prices[p.stock_code]
         assert pr.sell_price == price
         order = pr.order
+        assert order is (pr.orders[0] if pr.orders else None)
         arrival = month_index(order.arrival_month) if order else None
-        funded_in = order is not None and order.funded and arrival is not None
-        e = (
-            min(horizon, arrival + 2)
-            if funded_in and arrival is not None and arrival <= horizon
-            else horizon
-        )
-        window, later = pr.plan_months[:e], pr.plan_months[e:]
         do_nothing_unmet = sum(r.unmet for r in pr.months)
         plan_unmet = sum(r.unmet for r in pr.plan_months)
         assert pr.lost_sales_gbp == round(do_nothing_unmet * price, 2)
-        assert pr.lost_sales_after_plan_gbp == round(
-            sum(r.unmet for r in window) * price, 2
-        )
-        assert pr.stockout_months == sum(r.unmet > 0 for r in window)
+        assert pr.lost_sales_after_plan_gbp == round(plan_unmet * price, 2)
+        assert pr.stockout_months == sum(r.unmet > 0 for r in pr.plan_months)
         assert pr.at_risk_after_plan == (pr.stockout_months > 0)
+        gap = (
+            {
+                r.month
+                for r in pr.months
+                if pr.stockout.start_month <= r.month <= pr.stockout.end_month
+            }
+            if pr.stockout
+            else set()
+        )
+        later = (
+            [r for r in pr.plan_months if r.month not in gap]
+            if order is not None and order.funded
+            else []
+        )
         assert pr.later_shortfall_units == sum(r.unmet for r in later)
-        assert sum(r.unmet for r in window) + pr.later_shortfall_units == plan_unmet
         assert pr.later_shortfall_month == next(
             (r.month for r in later if r.unmet > 0), None
         )
         assert pr.later_shortfall_gbp == round(pr.later_shortfall_units * price, 2)
-        later_flags = [f for f in pr.flags if f.startswith("Later shortfall")]
+        assert pr.later_shortfall_units <= plan_unmet
+        short_flags = [f for f in pr.flags if f.startswith("Short after plan")]
+        assert not any(f.startswith("Later shortfall") for f in pr.flags)
         if pr.later_shortfall_units:
             assert pr.later_shortfall_month is not None
             text = units(pr.later_shortfall_units)
             when = month(pr.later_shortfall_month)
-            assert later_flags == [f"Later shortfall not covered: {text} from {when}"]
+            assert short_flags == [f"Short after plan: {text} from {when}"]
         else:
-            assert later_flags == []
+            assert short_flags == []
             assert pr.later_shortfall_month is None
-        # with-plan unmet never exceeds do-nothing month by month, so window ⊆ 1..H bounds it
         for a, b in zip(pr.plan_months, pr.months, strict=True):
             assert a.unmet <= b.unmet
         assert pr.lost_sales_after_plan_gbp <= pr.lost_sales_gbp
-        assert (
-            pr.lost_sales_after_plan_gbp + pr.later_shortfall_gbp
-            <= pr.lost_sales_gbp + 0.011
-        )
+        assert pr.later_shortfall_gbp <= pr.lost_sales_after_plan_gbp + 0.011
         if pr.limiting_factor == "lead time":
             assert pr.stockout is not None and pr.runout_month is not None
             start = month_index(pr.runout_month)
             arrives = arrival is not None and pr.order is not None and pr.order.funded
             end = min(arrival - 1, horizon) if arrival and arrives else horizon
             assert start <= end <= horizon
-            gap = pr.months[start - 1 : end]
+            window = pr.months[start - 1 : end]
             assert pr.stockout.start_month == pr.runout_month == month_key(start)
             assert pr.stockout.end_month == month_key(end)
-            assert pr.stockout.months == len(gap) == end - start + 1
-            assert pr.stockout.units == sum(r.unmet for r in gap)
+            assert pr.stockout.months == len(window) == end - start + 1
+            assert pr.stockout.units == sum(r.unmet for r in window)
             assert pr.stockout.lost_sales_gbp == round(pr.stockout.units * price, 2)
+            if order is not None and order.funded:
+                assert pr.stockout.units + pr.later_shortfall_units == sum(
+                    r.unmet for r in pr.plan_months
+                )
         else:
             assert pr.stockout is None
         overstocked = any(f.startswith("Overstocked") for f in pr.flags)
@@ -741,7 +793,9 @@ def test_real_84347_baseline_story(preset_runs: dict[str, ScenarioResult]) -> No
     )
     assert p.stockout.units == 1006
     assert p.stockout.lost_sales_gbp == round(1006 * p.sell_price, 2)
-    assert f"Later shortfall not covered: {units(5759)} from Sep 2012" in p.flags
+    assert [f for f in p.flags if f.startswith("Short after plan")] == [
+        f"Short after plan: {units(2948)} from Nov 2012"
+    ]
 
 
 @pytest.mark.parametrize("horizon", [6, 9, 12])

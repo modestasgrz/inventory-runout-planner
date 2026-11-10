@@ -55,14 +55,16 @@ def sc(**kw: float | str) -> Scenario:
     return Scenario.model_validate(f | kw)
 
 
-def go(*products: Product, demand: int = 60, **kw: float | str) -> ScenarioResult:
+def go(
+    *products: Product, demand: int = 60, max_orders: int = 4, **kw: float | str
+) -> ScenarioResult:
     data = PlannerData(
         products=list(products),
         history={p.stock_code: [demand] * 24 for p in products},
         history_months=MONTHS,
         prices={p.stock_code: 5.0 for p in products},
     )
-    return run(data, sc(**kw))
+    return run(data, sc(**kw), max_orders=max_orders)
 
 
 def test_scenario_model_bounds_exact() -> None:
@@ -140,12 +142,12 @@ def test_scenario_errors_exact_boundaries_pass() -> None:
         (
             "budget_gbp",
             1_000_001,
-            "Budget (£) must be between 0 and 1 000 000 — you entered 1\u202f000\u202f001.",
+            "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered 1\u202f000\u202f001.",
         ),
         (
             "budget_gbp",
             -0.5,
-            "Budget (£) must be between 0 and 1 000 000 — you entered -0.5.",
+            "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered -0.5.",
         ),
         (
             "safety_months",
@@ -343,11 +345,35 @@ def test_hand_inbound_at_horizon_edge() -> None:
 
 
 def test_hand_zero_budget_funds_nothing_and_ties_rank_by_code() -> None:
-    r = go(prod("B"), prod("A"), budget_gbp=0)
+    r = go(prod("B"), prod("A"), budget_gbp=0, max_orders=1)
     assert [line.stock_code for line in r.plan] == ["A", "B"]
     assert not any(line.funded for line in r.plan)
     assert r.kpis.funded_spend_gbp == 0
     assert all(line.limiting_factor == "budget" for line in r.plan)
+
+
+def test_hand_zero_budget_follow_ups_rank_after_both_first_orders() -> None:
+    """DEC-21: s = 2 for both first orders, s = 6 (May 2012) for both follow-ups; ties by code, then k."""
+    r = go(prod("B"), prod("A"), budget_gbp=0)
+    assert [(x.stock_code, x.order_no) for x in r.plan] == [
+        ("A", 1),
+        ("B", 1),
+        ("A", 2),
+        ("B", 2),
+    ]
+    assert not any(line.funded for line in r.plan)
+    assert all(line.limiting_factor == "budget" for line in r.plan)
+    assert [x.reason.endswith("Not funded: £0.00 left of budget.") for x in r.plan] == [
+        True,
+        True,
+        False,
+        False,
+    ]
+    assert all(
+        x.reason.endswith("Not funded: earlier order not funded.") for x in r.plan[2:]
+    )
+    assert r.kpis.unfunded_orders == 4
+    assert r.kpis.unfunded_gbp == 2 * (400 + 360)
 
 
 def test_budget_exactly_equal_to_cost_is_funded() -> None:
@@ -365,18 +391,29 @@ def test_budget_one_penny_short_is_not_funded() -> None:
 def test_greedy_skips_big_order_and_funds_later_small_one() -> None:
     big = prod("A", unit_cost=10.0)
     small = prod("B", unit_cost=1.0)
-    r = go(big, small, budget_gbp=250)
+    r = go(big, small, budget_gbp=250, max_orders=1)
     assert [(x.stock_code, x.funded) for x in r.plan] == [("A", False), ("B", True)]
+    # follow-ups: A2 blocked by A1, B2 (£180) does not fit the £50 left
+    r4 = go(big, small, budget_gbp=250)
+    assert [(x.stock_code, x.order_no, x.funded) for x in r4.plan] == [
+        ("A", 1, False),
+        ("B", 1, True),
+        ("A", 2, False),
+        ("B", 2, False),
+    ]
+    assert r4.plan[2].reason.endswith("Not funded: earlier order not funded.")
+    assert r4.plan[3].cost_gbp == 180.0
+    assert r4.plan[3].reason.endswith("Not funded: £50.00 left of budget.")
 
 
 def test_rank_prefers_earlier_runout_then_value_at_risk() -> None:
     soon = prod("Z", stock_on_hand=10)
     later = prod("A", stock_on_hand=100)
-    r = go(later, soon)
+    r = go(later, soon, max_orders=1)
     assert [x.stock_code for x in r.plan] == ["Z", "A"]
     cheap = prod("A", stock_on_hand=100, unit_cost=1.0)
     dear = prod("B", stock_on_hand=100, unit_cost=5.0)
-    r2 = go(cheap, dear)
+    r2 = go(cheap, dear, max_orders=1)
     assert [x.stock_code for x in r2.plan] == ["B", "A"]
 
 
@@ -395,7 +432,7 @@ def test_scenario_errors_non_numeric_text_echoed() -> None:
     }
     assert scenario_errors(raw) == [
         "Demand growth (%) must be between -50 and 100 — you entered abc.",
-        "Budget (£) must be between 0 and 1 000 000 — you entered .",
+        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered .",
         "Safety stock (months) must be between 0 and 6 — you entered 1,5.",
     ]
 

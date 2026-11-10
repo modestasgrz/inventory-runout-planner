@@ -21,11 +21,12 @@ SLATE = "#94A3B8"
 FONT = '"Inter", "Avenir Next", "Helvetica Neue", Arial, sans-serif'
 TEMPLATE = "runout_dark"
 
-# Colour language (DEC-17, Change 3): blue = funded / OK, slate = stock run-out, amber = budget, red = lead time.
+# Colour language (DEC-17, Change 4): red = out of stock / lead time, amber = budget / unfunded, blue = funded / plan,
+# grey = neutral (stock, capacity, none).
 FACTOR_COLORS = {
     "lead time": RED,
     "budget": AMBER,
-    "capacity": AMBER,
+    "capacity": SLATE,
     "stock": SLATE,
     "none": MUTED,
 }
@@ -58,19 +59,26 @@ def apply() -> None:
 
 
 def styled(frame: pd.DataFrame) -> "pd.io.formats.style.Styler":
-    """Limiting factor as coloured text and unfunded rows amber-tinted, the same on every table."""
+    """Limiting factor as coloured text; unfunded rows amber-tinted with an amber Status, the same on every table."""
     styler = frame.style
     if "Limiting factor" in frame.columns:
         styler = styler.map(
             lambda v: f"color: {FACTOR_COLORS.get(v, TEXT)}; font-weight: 600",
             subset=["Limiting factor"],
         )
-    if "Funded" in frame.columns:
-        styler = styler.apply(
+    if "Status" in frame.columns:
+        styler = styler.map(
+            lambda v: (
+                f"color: {AMBER}; font-weight: 600"
+                if v == "Not funded"
+                else f"color: {BLUE}"
+            ),
+            subset=["Status"],
+        ).apply(
             lambda row: (
                 [
                     "background-color: rgba(245, 158, 11, 0.12)"
-                    if not row["Funded"]
+                    if row["Status"] == "Not funded"
                     else ""
                 ]
                 * len(row)

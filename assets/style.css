@@ -1,79 +1,82 @@
 /* Colors come from CSS variables injected by ui/theme.py (the one token file). */
 html, body, [class*="css"], .stMarkdown, .stCaption { font-family: var(--font); }
 .block-container { padding: 2rem 2rem 3rem; max-width: 1400px; }
-[data-testid="stSidebar"] { min-width: 260px !important; max-width: 260px !important; }
-
-[data-testid="stSidebar"] { background: var(--surface); border-right: 1px solid var(--border); }
-
-[data-testid="stMetric"] {
+[data-testid="stSidebar"] {
+  min-width: 260px !important;
+  max-width: 260px !important;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  min-height: 108px;
+  border-right: 1px solid var(--border);
 }
-[data-testid="stMetricLabel"] { color: var(--muted); }
-[data-testid="stMetricValue"] { line-height: 1.25; }
+h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 
 /* Number inputs are typed only (owner decision, DEC-17). */
 [data-testid="stNumberInputStepUp"] { display: none; }
 [data-testid="stNumberInputStepDown"] { display: none; }
 
-.runout-hero {
+/* Header (DEC-22): title, outlined neutral synthetic pill, data date, forecast-error chip. */
+.page-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
+.page-head h1 { margin: 0 !important; padding: 0 !important; }
+.page-head .as-of { color: var(--muted); font-size: 0.9rem; }
+.synthetic-badge {
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.chip {
+  display: inline-block;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* KPI cards (DEC-14): equal, label one line, fixed label height so values sit level, grey sub-line. */
+[data-testid="stMetric"] {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 6px solid var(--red);
   border-radius: 10px;
-  padding: 18px 22px;
-  margin: 6px 0 18px;
+  padding: 12px 14px;
+  min-height: 136px;
 }
-.runout-hero .eyebrow { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.runout-hero .product { font-size: 22px; font-weight: 650; margin: 4px 0; }
-.runout-hero .facts { display: flex; gap: 22px; flex-wrap: wrap; font-size: 1rem; }
-.runout-hero .facts b { color: var(--text); }
-.runout-hero .reason { color: var(--muted); margin-top: 8px; font-size: 0.92rem; }
-.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; color: var(--bg); }
-
-/* KPI cards (DEC-14): equal width, fixed height, label 12 px uppercase on one line, value ~32 px semibold. */
-[data-testid="stMetric"] { min-height: 148px; }
-[data-testid="stMetric"] { padding: 12px 14px; }
+[data-testid="stMetricLabel"] { color: var(--muted); min-height: 1.5em; }
 [data-testid="stMetricLabel"] p {
   font-size: 12px !important;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
-  line-height: 1.25;
+  letter-spacing: 0.04em;
+  white-space: nowrap !important;
 }
-/* 5 cards at 1280 px can't fit the longest label on one line; reserve two lines so every value sits at the same height. */
-[data-testid="stMetric"] label, [data-testid="stMetricLabel"] { min-height: 2.6em !important; align-items: flex-start !important; }
-[data-testid="stMetricLabel"] *, [data-testid="stMetricValue"] * {
+[data-testid="stMetricValue"] { font-size: clamp(1.4rem, 2vw, 2rem); font-weight: 600; line-height: 1.25; white-space: nowrap; }
+[data-testid="stMetricValue"] * { overflow: visible !important; text-overflow: clip !important; }
+[data-testid="stMetricDelta"] { font-size: 0.8rem; background: none !important; padding: 0 !important; }
+[data-testid="stMetricDelta"], [data-testid="stMetricDelta"] * {
+  color: var(--muted) !important;
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;
 }
-[data-testid="stMetricValue"] { font-size: clamp(1.4rem, 2vw, 2rem); font-weight: 600; white-space: nowrap; }
-[data-testid="stMetricDelta"] { color: var(--muted) !important; font-size: 0.8rem; background: none !important; padding: 0 !important; }
-[data-testid="stMetricDelta"], [data-testid="stMetricDelta"] * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
-[data-testid="stMetricDelta"] * { color: var(--muted) !important; }
 .st-key-kpi-warn [data-testid="stMetricValue"] { color: var(--amber); }
 
-.page-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
-.page-head h1 { margin: 0 !important; padding: 0 !important; }
-.page-head .as-of { color: var(--muted); font-size: 0.9rem; }
-.synthetic-badge {
-  background: rgba(245, 158, 11, 0.14);
-  color: var(--amber);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  border-radius: 999px;
-  padding: 3px 12px;
-  font-weight: 600;
-  white-space: nowrap;
+/* Run-out card (DEC-22): one decision; red only on the left border, the chip and the £ figure. */
+.runout-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--red);
+  border-radius: 10px;
+  padding: 16px 22px;
+  margin: 6px 0 18px;
 }
-h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
-
-.runout-hero .factor { font-weight: 650; }
-.runout-hero .truth { color: var(--red); font-weight: 600; margin-top: 10px; font-size: 1.02rem; }
-
-.mini-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 18px; }
-.mini-stats > div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; }
-.mini-stats .k { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-.mini-stats .v { font-weight: 600; }
+.runout-hero .eyebrow { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.runout-hero .product { font-size: 22px; font-weight: 650; margin: 4px 0 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.runout-hero .factor-chip { background: none; cursor: default; font-size: 0.8rem; }
+.runout-hero .status { font-size: 1.02rem; font-weight: 600; }
+.runout-hero .reason { color: var(--muted); margin-top: 4px; font-size: 0.92rem; }
+.runout-hero .cost { color: var(--red); font-weight: 650; font-size: 1.15rem; margin-top: 8px; }
+.runout-hero .later { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }

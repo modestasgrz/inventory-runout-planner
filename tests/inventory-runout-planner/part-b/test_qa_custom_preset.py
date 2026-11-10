@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 from inventory_runout_planner.data import load
-from inventory_runout_planner.fmt import gbp, number
+from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import Scenario, ScenarioResult
 from inventory_runout_planner.planner import run
 from inventory_runout_planner.presets import BASELINE, PRESETS
@@ -37,18 +37,33 @@ def app() -> AppTest:
     return AppTest.from_file(str(REPO / "app.py"), default_timeout=30).run()
 
 
-def kpis(at: AppTest) -> dict[str, str]:
-    """KPI values without Earliest run-out, which Overview leaves to its hero block (DEC-14)."""
-    return {m.label: str(m.value) for m in at.metric if m.label != "Earliest run-out"}
+def kpis(at: AppTest) -> dict[str, tuple[str, str]]:
+    """Every DEC-14 card in page order: label -> (value, sub-line)."""
+    return {m.label: (str(m.value), str(m.proto.delta)) for m in at.metric}
 
 
-def expected(result: ScenarioResult) -> dict[str, str]:
+def expected(result: ScenarioResult) -> dict[str, tuple[str, str]]:
     k = result.kpis
     return {
-        "Products at risk": number(k.products_at_risk),
-        "Purchase spend": gbp(k.funded_spend_gbp),
-        "Unfunded orders": number(k.unfunded_orders),
-        "Lost sales after plan": gbp(k.lost_sales_after_plan_gbp),
+        "At risk": (
+            number(k.products_at_risk),
+            f"of {number(len(result.products))} products",
+        ),
+        "Earliest run-out": (
+            month(k.earliest_runout_month)
+            if k.earliest_runout_month
+            else "None in horizon",
+            k.earliest_runout_code or "—",
+        ),
+        "Spend": (gbp(k.funded_spend_gbp), f"of {gbp(k.budget_gbp)}"),
+        "Unfunded": (
+            number(k.unfunded_orders),
+            f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else "none",
+        ),
+        "Lost sales": (
+            gbp(k.lost_sales_after_plan_gbp),
+            f"{gbp(k.lost_sales_gbp)} if nothing ordered",
+        ),
     }
 
 
@@ -263,7 +278,7 @@ def test_overview_order_now_table_matches_for_custom(
     result = run(DATA, scenario)
     assert preset(at) == "Custom"
     assert table_codes(at) == order_now_codes(result)
-    assert kpis(at)["Products at risk"] == str(result.kpis.products_at_risk)
+    assert kpis(at)["At risk"][0] == number(result.kpis.products_at_risk)
 
 
 @pytest.mark.parametrize(
@@ -288,4 +303,4 @@ def test_overview_order_now_table_matches_multi_edit_custom(
     result = run(DATA, scenario)
     assert preset(at) == "Custom"
     assert table_codes(at) == order_now_codes(result)
-    assert kpis(at)["Products at risk"] == str(result.kpis.products_at_risk)
+    assert kpis(at)["At risk"][0] == number(result.kpis.products_at_risk)

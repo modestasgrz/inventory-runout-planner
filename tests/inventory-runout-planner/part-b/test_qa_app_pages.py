@@ -22,27 +22,13 @@ PAGES = [
     "app_pages/reorder_plan.py",
     "app_pages/methodology.py",
 ]
-KPI_LABELS = [
-    "Products at risk",
-    "Earliest run-out",
-    "Purchase spend",
-    "Unfunded orders",
-    "Lost sales after plan",
-]
+KPI_LABELS = ["At risk", "Earliest run-out", "Spend", "Unfunded", "Lost sales"]
+BUDGET = "Purchase budget (£, whole horizon)"
 
 
 def spend_budget(at: AppTest) -> str:
-    """The Purchase spend card's sub-line ('of £budget')."""
-    return str(next(m for m in at.metric if m.label == "Purchase spend").proto.delta)
-
-
-def labels_for(page: str) -> list[str]:
-    """Overview leaves Earliest run-out to its hero block (DEC-14)."""
-    return [
-        x
-        for x in KPI_LABELS
-        if x != "Earliest run-out" or not page.endswith("overview.py")
-    ]
+    """The Spend card's sub-line ('of £budget')."""
+    return str(next(m for m in at.metric if m.label == "Spend").proto.delta)
 
 
 NBSP = " "
@@ -70,12 +56,12 @@ INVALID = [
     (
         "budget_gbp",
         -1,
-        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered -1.",
+        f"{BUDGET} must be between 0 and 1 000 000 — you entered -1.",
     ),
     (
         "budget_gbp",
         2_000_000,
-        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered 2 000 000.",
+        f"{BUDGET} must be between 0 and 1 000 000 — you entered 2 000 000.",
     ),
     (
         "safety_months",
@@ -94,9 +80,9 @@ def app() -> AppTest:
     return AppTest.from_file(str(REPO / "app.py"), default_timeout=30).run()
 
 
-def kpis(at: AppTest) -> dict[str, str]:
-    """KPI values without Earliest run-out, which Overview leaves to its hero block (DEC-14)."""
-    return {m.label: str(m.value) for m in at.metric if m.label != "Earliest run-out"}
+def kpis(at: AppTest) -> dict[str, tuple[str, str]]:
+    """Every DEC-14 card: label -> (value, sub-line)."""
+    return {m.label: (str(m.value), str(m.proto.delta)) for m in at.metric}
 
 
 def errors(at: AppTest) -> list[str]:
@@ -107,14 +93,29 @@ def md(at: AppTest) -> str:
     return html.unescape("\n".join(str(m.value) for m in at.markdown))
 
 
-def expected_kpis(name: str) -> dict[str, str]:
-    data = load(DATA)
-    k = run(data, PRESETS[name]).kpis
+def expected_kpis(name: str) -> dict[str, tuple[str, str]]:
+    r = run(load(DATA), PRESETS[name])
+    k = r.kpis
     return {
-        "Products at risk": number(k.products_at_risk),
-        "Purchase spend": gbp(k.funded_spend_gbp),
-        "Unfunded orders": number(k.unfunded_orders),
-        "Lost sales after plan": gbp(k.lost_sales_after_plan_gbp),
+        "At risk": (
+            number(k.products_at_risk),
+            f"of {number(len(r.products))} products",
+        ),
+        "Earliest run-out": (
+            month(k.earliest_runout_month)
+            if k.earliest_runout_month
+            else "None in horizon",
+            k.earliest_runout_code or "—",
+        ),
+        "Spend": (gbp(k.funded_spend_gbp), f"of {gbp(k.budget_gbp)}"),
+        "Unfunded": (
+            number(k.unfunded_orders),
+            f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else "none",
+        ),
+        "Lost sales": (
+            gbp(k.lost_sales_after_plan_gbp),
+            f"{gbp(k.lost_sales_gbp)} if nothing ordered",
+        ),
     }
 
 
@@ -132,11 +133,12 @@ def test_preset_kpis_match_planner_and_identical_on_all_pages(name: str) -> None
     assert not at.exception
     assert at.selectbox(key="preset").value == name
     expected = expected_kpis(name)
-    assert [m.label for m in at.metric] == labels_for("overview.py")
+    assert [m.label for m in at.metric] == KPI_LABELS
     assert kpis(at) == expected
     for page in PAGES:
         at.switch_page(page).run()
         assert not at.exception, page
+        assert [m.label for m in at.metric] == KPI_LABELS, page
         assert kpis(at) == expected, page
         assert at.selectbox(key="preset").value == name
         assert all(m.help for m in at.metric)
@@ -206,7 +208,7 @@ def test_multiple_invalid_inputs_list_all_in_order() -> None:
     assert [m.split(" must")[0] for m in msgs] == [
         "Demand growth (%)",
         "Supplier delay (weeks)",
-        "Purchase budget (£, whole horizon)",
+        BUDGET,
         "Safety stock (months)",
     ]
     assert len(at.metric) == 0
@@ -273,17 +275,19 @@ def test_boundary_combos_render_all_pages(combo: dict[str, Any]) -> None:
         at.switch_page(page).run()
         assert not at.exception, (combo, page)
         assert errors(at) == [], (combo, page)
-        assert [m.label for m in at.metric] == labels_for(page)
+        assert [m.label for m in at.metric] == KPI_LABELS
 
 
 def test_budget_zero_everything_unfunded() -> None:
     at = set_input(app(), "budget_gbp", 0)
     k = kpis(at)
-    assert k["Purchase spend"] == gbp(0)
+    assert k["Spend"] == (gbp(0), f"of {gbp(0)}")
     assert spend_budget(at) == f"of {gbp(0)}"
-    assert int(k["Unfunded orders"].replace(NBSP, "")) >= 1
+    assert int(k["Unfunded"][0].replace(NBSP, "")) >= 1
+    assert k["Unfunded"][1].endswith(" short")
     at.switch_page("app_pages/reorder_plan.py").run()
     assert f"Funded total: {gbp(0)}" in md(at)
+    assert set(at.dataframe[0].value["Status"]) == {"Not funded"}
 
 
 def test_forecast_picker_lists_all_products_and_each_renders() -> None:
@@ -337,11 +341,12 @@ def test_reorder_table_matches_plan(name: str) -> None:
     assert not at.exception
     df = at.dataframe[0].value
     assert len(df) == len(result.plan)
-    ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
-    assert list(df["Urgency rank"]) == [line.rank for line in ordered]
-    assert sorted(df["Urgency rank"]) == list(range(1, len(result.plan) + 1))
+    ordered = sorted(result.plan, key=lambda line: line.rank)
+    assert list(df["#"]) == list(range(1, len(result.plan) + 1))
     assert list(df.columns).index("Product") < list(df.columns).index("Code")
     assert list(df["Code"]) == [line.stock_code for line in ordered]
+    assert list(df["Order"]) == [line.order_no for line in ordered]
+    assert list(df["Product"]) == [line.description.title() for line in ordered]
     assert f"Funded total: {gbp(result.kpis.funded_spend_gbp)}" in md(at)
     assert len(at.get("download_button")) == 4
     assert sorted(b.proto.label for b in at.get("download_button")) == sorted(
@@ -358,7 +363,7 @@ def test_funded_total_matches_kpi_prefix() -> None:
     at = app()
     at.switch_page("app_pages/reorder_plan.py").run()
     funded = md(at).split("Funded total: ")[1].split("**")[0]
-    assert kpis(at)["Purchase spend"].startswith(funded)
+    assert kpis(at)["Spend"][0] == funded
 
 
 @pytest.mark.parametrize("name", list(PRESETS))
@@ -389,12 +394,11 @@ def test_overview_flags_include_every_core_flag() -> None:
 def test_overview_hero_matches_kpi() -> None:
     at = app()
     k = run(load(DATA), PRESETS["Baseline"]).kpis
-    at.switch_page("app_pages/forecast.py").run()
-    assert {m.label: str(m.value) for m in at.metric}["Earliest run-out"] == month(
-        k.earliest_runout_month or ""
-    )
-    at.switch_page("app_pages/overview.py").run()
+    card = (month(k.earliest_runout_month or ""), k.earliest_runout_code or "")
+    assert kpis(at)["Earliest run-out"] == card
     assert f"({k.earliest_runout_code})" in md(at)
+    at.switch_page("app_pages/forecast.py").run()
+    assert kpis(at)["Earliest run-out"] == card
 
 
 def test_notice_and_attribution_on_all_pages() -> None:
@@ -403,9 +407,12 @@ def test_notice_and_attribution_on_all_pages() -> None:
         at.switch_page(page).run()
         assert "Synthetic stock data — demonstration only" in md(at)
         assert "Data as of Dec 2011" in md(at)
+        main = html.unescape(" ".join(str(m.value) for m in at.main.markdown))
+        assert "Planning as of" not in main
         side = " ".join(str(c.value) for c in at.sidebar.caption)
         assert "Planning as of 1 Dec 2011" in side
         assert "CC BY 4.0" in side
+        assert "doi.org" not in side
 
 
 def _copy_data(dest: Path) -> Path:

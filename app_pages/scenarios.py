@@ -13,7 +13,7 @@ from inventory_runout_planner.ui.state import run_scenario
 result: ScenarioResult = st.session_state["result"]
 directory: str = st.session_state["data_dir"]
 LEVERS = {
-    "Baseline": "Today's plan: no growth, suppliers on time, £100 000 budget, 1 month safety stock.",
+    "Baseline": f"Today's plan: no growth, suppliers on time, {gbp(PRESETS['Baseline'].budget_gbp)} budget for the horizon, 1 month safety stock.",
     "Peak season +25%": "Demand 25 % above last year in every month.",
     "Supplier delay +3 weeks": "Every supplier and every open inbound order arrives 3 weeks later.",
     "Tight budget": "Half the purchase budget.",
@@ -21,40 +21,25 @@ LEVERS = {
 }
 
 st.caption(
-    "Change the inputs in the sidebar, or load a preset there. Every page recalculates from the same scenario."
-)
-
-s = result.scenario
-method = "Seasonal naive" if s.method == "seasonal_naive" else "Trailing 3-month"
-st.markdown(
-    '<div class="mini-stats">'
-    + "".join(
-        f'<div><span class="k">{label}</span><span class="v">{value}</span></div>'
-        for label, value in [
-            ("Horizon", f"{s.horizon_months} months"),
-            ("Demand growth", f"{s.growth_pct:g} %"),
-            ("Supplier delay", f"{s.delay_weeks} weeks"),
-            ("Budget", gbp(s.budget_gbp)),
-            ("Safety stock", f"{s.safety_months:g} month(s)"),
-            ("Forecast", method),
-        ]
-    )
-    + "</div>",
-    unsafe_allow_html=True,
+    "Change the inputs in the sidebar, or load a preset there. Every page recalculates from the same scenario; "
+    "this table always shows the five presets."
 )
 
 st.subheader("Presets side by side")
 st.markdown("\n".join(f"- **{name}:** {lever}" for name, lever in LEVERS.items()))
 runs = {name: run_scenario(preset, directory) for name, preset in PRESETS.items()}
+base = runs["Baseline"].kpis.lost_sales_after_plan_gbp
 table = pd.DataFrame(
     [
         {
             "Preset": name,
             "Products at risk": r.kpis.products_at_risk,
+            "Lost sales £": half_up(Fraction(str(r.kpis.lost_sales_after_plan_gbp))),
+            "vs Baseline £": half_up(
+                Fraction(str(r.kpis.lost_sales_after_plan_gbp)) - Fraction(str(base))
+            ),
             "Unfunded orders": r.kpis.unfunded_orders,
             "Unfunded £": half_up(Fraction(str(r.kpis.unfunded_gbp))),
-            "Lost sales £": half_up(Fraction(str(r.kpis.lost_sales_after_plan_gbp))),
-            "Stock-out months": r.kpis.stockout_months,
             "Earliest run-out": f"{month(r.kpis.earliest_runout_month)} · {r.kpis.earliest_runout_code}"
             if r.kpis.earliest_runout_month
             else "None",
@@ -62,32 +47,40 @@ table = pd.DataFrame(
         for name, r in runs.items()
     ]
 )
+
+
+def signed(v: object) -> str:
+    """'+£12 345', '−£3 210' or '—' for Baseline's own zero."""
+    value = float(str(v))
+    if value == 0:
+        return "—"
+    return ("+" if value > 0 else "−") + gbp(abs(value))
+
+
 st.dataframe(
     table.style.format(
         {
-            column: (lambda v: gbp(float(str(v))))
-            if "£" in column
-            else (lambda v: number(float(str(v))))
-            for column in [
-                "Products at risk",
-                "Unfunded orders",
-                "Unfunded £",
-                "Lost sales £",
-                "Stock-out months",
-            ]
+            "Products at risk": lambda v: number(float(str(v))),
+            "Lost sales £": lambda v: gbp(float(str(v))),
+            "vs Baseline £": signed,
+            "Unfunded orders": lambda v: number(float(str(v))),
+            "Unfunded £": lambda v: gbp(float(str(v))),
         }
+    ).map(
+        lambda v: (
+            f"color: {theme.RED}" if float(str(v)) > 0 else f"color: {theme.MUTED}"
+        ),
+        subset=["vs Baseline £"],
     ),
     hide_index=True,
     width="stretch",
     column_config={
         "Preset": st.column_config.TextColumn(width="medium"),
-        "Unfunded £": st.column_config.NumberColumn(width="small"),
         "Lost sales £": st.column_config.NumberColumn(
-            width="small",
-            help="Lost sales after plan = unmet units × median selling price, up to the end of each order's 3-month cover",
+            help="Lost sales = unmet units × median selling price over the whole horizon, with every funded order",
         ),
-        "Stock-out months": st.column_config.NumberColumn(
-            help="Σ over products of months with unmet demand after the plan (same window)",
+        "vs Baseline £": st.column_config.NumberColumn(
+            help="This preset's lost sales minus Baseline's: + means more sales lost"
         ),
     },
 )
@@ -113,14 +106,14 @@ for i, n in enumerate(names):
         x1=i + 0.45,
         y0=runs[n].kpis.budget_gbp,
         y1=runs[n].kpis.budget_gbp,
-        line={"color": theme.AMBER, "width": 3},
+        line={"color": theme.TEXT, "width": 2, "dash": "dash"},
     )
 figure.add_scatter(
     x=[None],
     y=[None],
     mode="lines",
     name="Budget",
-    line={"color": theme.AMBER, "width": 3},
+    line={"color": theme.TEXT, "width": 2, "dash": "dash"},
 )
 figure.update_layout(
     template=theme.TEMPLATE,

@@ -96,8 +96,9 @@ def check_rows(rows: list[MonthRow], stock: int) -> None:
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_random_world_invariants(seed: int) -> None:
+    """Single-order mechanics (DEC-09); follow-ups (DEC-21) are checked in test_qa_change4.py."""
     data, sc = world(seed)
-    res = run(data, sc)
+    res = run(data, sc, max_orders=1)
     by_code = {p.stock_code: p for p in data.products}
     assert {p.stock_code for p in res.products} == set(by_code)
     assert len(res.products) == len(data.products)

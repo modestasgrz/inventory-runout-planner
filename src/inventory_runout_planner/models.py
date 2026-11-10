@@ -31,6 +31,7 @@ class PlannerData(BaseModel):
     products: list[Product]
     history: dict[str, list[int]]
     history_months: list[str]
+    prices: dict[str, float]
 
 
 class Scenario(BaseModel):
@@ -66,6 +67,14 @@ class ReorderLine(BaseModel):
     reason: str
 
 
+class Stockout(BaseModel):
+    start_month: str
+    end_month: str
+    months: int
+    units: int
+    lost_sales_gbp: float
+
+
 class ProductResult(BaseModel):
     stock_code: str
     description: str
@@ -81,6 +90,16 @@ class ProductResult(BaseModel):
     value_at_risk_gbp: float
     cover_months: float
     order_now: bool
+    sell_price: float
+    lost_sales_gbp: float
+    lost_sales_after_plan_gbp: float
+    later_shortfall_units: int
+    later_shortfall_month: str | None
+    later_shortfall_gbp: float
+    stockout: Stockout | None
+    stockout_months: int
+    at_risk_after_plan: bool
+    tied_up_gbp: float
 
 
 class Kpis(BaseModel):
@@ -93,6 +112,27 @@ class Kpis(BaseModel):
     budget_gbp: float
     unfunded_orders: int
     stock_value_gbp: float
+    unfunded_gbp: float
+    lost_sales_gbp: float
+    lost_sales_after_plan_gbp: float
+    later_shortfall_gbp: float
+    tied_up_gbp: float
+    stockout_months: int
+
+
+class BacktestRow(BaseModel):
+    stock_code: str
+    description: str
+    mape_pct: float | None
+    abs_error_units: int
+    actual_units: int
+
+
+class Backtest(BaseModel):
+    method: Method
+    as_of: str
+    rows: list[BacktestRow]
+    overall_pct: float
 
 
 class ScenarioResult(BaseModel):

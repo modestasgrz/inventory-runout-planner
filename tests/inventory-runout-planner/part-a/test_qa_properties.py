@@ -78,6 +78,7 @@ def world(seed: int) -> tuple[PlannerData, Scenario]:
         products=products,
         history={p.stock_code: rand_history(rng) for p in products},
         history_months=MONTHS,
+        prices={p.stock_code: 5.0 for p in products},
     )
     return data, rand_scenario(rng)
 
@@ -194,7 +195,10 @@ def test_random_world_invariants(seed: int) -> None:
         for p in at_risk
         if p.runout_month and p.runout_month <= month_key(p.lead_months + 1)
     ]
-    assert res.kpis.products_at_risk == len(order_now)
+    assert {p.stock_code for p in res.products if p.order_now} == {
+        p.stock_code for p in order_now
+    }
+    assert res.kpis.products_at_risk == sum(p.at_risk_after_plan for p in res.products)
     if at_risk:
         best = min(
             at_risk,
@@ -385,6 +389,7 @@ def test_safety_units_tie_rounds_up_for_decimal_safety_months() -> None:
         ],
         history={"S": [45] * 24},
         history_months=MONTHS,
+        prices={"S": 5.0},
     )
     sc = Scenario(
         horizon_months=6,

@@ -270,7 +270,7 @@ def test_overview_order_now_table_matches_for_custom(
     result = run(DATA, scenario)
     assert preset(at) == "Custom"
     assert table_codes(at) == order_now_codes(result)
-    assert kpis(at)["Products at risk"] == str(len(order_now_codes(result)))
+    assert kpis(at)["Products at risk"] == str(result.kpis.products_at_risk)
 
 
 @pytest.mark.parametrize(
@@ -295,4 +295,4 @@ def test_overview_order_now_table_matches_multi_edit_custom(
     result = run(DATA, scenario)
     assert preset(at) == "Custom"
     assert table_codes(at) == order_now_codes(result)
-    assert kpis(at)["Products at risk"] == str(len(order_now_codes(result)))
+    assert kpis(at)["Products at risk"] == str(result.kpis.products_at_risk)

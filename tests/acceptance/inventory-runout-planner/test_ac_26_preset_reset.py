@@ -15,8 +15,7 @@ def test_ac_26_preset_reset() -> None:
     assert at.number_input(key="growth_pct").value == 25
     peak = kpis(at)
     assert (
-        peak["Products at risk"] != base_kpis["Products at risk"]
-        or peak["Purchase spend"] != base_kpis["Purchase spend"]
+        peak["At risk"] != base_kpis["At risk"] or peak["Spend"] != base_kpis["Spend"]
     )
 
     at.button(key="reset").click().run()

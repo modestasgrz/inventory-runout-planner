@@ -91,10 +91,10 @@ st.dataframe(
                 "Code": r.stock_code,
                 "MAPE seasonal naive %": None
                 if r.mape_pct is None
-                else round(r.mape_pct),
+                else whole(r.mape_pct),
                 "MAPE trailing 3-month %": None
-                if trailing_mape[r.stock_code] is None
-                else round(trailing_mape[r.stock_code] or 0),
+                if (m := trailing_mape[r.stock_code]) is None
+                else whole(m),
             }
             for r in seasonal.rows
         ]

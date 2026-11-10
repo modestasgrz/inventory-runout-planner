@@ -81,7 +81,6 @@ st.dataframe(
     width="stretch",
     column_config={
         "Preset": st.column_config.TextColumn(width="medium"),
-        "Products at risk": st.column_config.NumberColumn(width="small"),
         "Unfunded £": st.column_config.NumberColumn(width="small"),
         "Lost sales £": st.column_config.NumberColumn(
             width="small",

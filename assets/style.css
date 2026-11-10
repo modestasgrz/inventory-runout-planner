@@ -43,6 +43,8 @@ html, body, [class*="css"], .stMarkdown, .stCaption { font-family: var(--font); 
   letter-spacing: 0.02em;
   line-height: 1.25;
 }
+/* 5 cards at 1280 px can't fit the longest label on one line; reserve two lines so every value sits at the same height. */
+[data-testid="stMetric"] label, [data-testid="stMetricLabel"] { min-height: 2.6em !important; align-items: flex-start !important; }
 [data-testid="stMetricLabel"] *, [data-testid="stMetricValue"] * {
   white-space: normal !important;
   overflow: visible !important;

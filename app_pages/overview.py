@@ -95,8 +95,6 @@ st.dataframe(
     column_config={
         "Product": st.column_config.TextColumn(width="medium"),
         "Code": st.column_config.TextColumn(width="small"),
-        "Runs out": st.column_config.TextColumn(width="small"),
-        "Order by": st.column_config.TextColumn(width="small"),
         "Qty": RIGHT,
         "Cost £": RIGHT,
         "Funded": st.column_config.CheckboxColumn(width="small"),
@@ -139,53 +137,43 @@ figure.update_layout(
 st.plotly_chart(figure, width="stretch")
 
 
-def flag_rows(name: str) -> list[tuple[ProductResult, str, float]]:
-    """(product, flag text, £) for one flag type."""
-    rows: list[tuple[ProductResult, str, float]] = []
-    for p in result.products:
-        gap, line = p.stockout, p.order
-        if name == "Lead time" and gap:
-            rows.append(
-                (
-                    p,
-                    f"Out of stock {month(gap.start_month)}"
-                    + (f"–{month(gap.end_month)}" if gap.months > 1 else "")
-                    + f": {number(gap.units)} units",
-                    gap.lost_sales_gbp,
-                )
-            )
-        elif name == "Budget not funded" and line and not line.funded:
-            rows.append(
-                (p, f"Order of {number(line.qty)} units not funded", line.cost_gbp)
-            )
-        elif name == "Capacity blocks order" and p.limiting_factor == "capacity":
-            text = next(f for f in p.flags if f.startswith("Capacity"))
-            rows.append((p, text, p.lost_sales_after_plan_gbp))
-        else:
-            prefix = {
-                "Later shortfall not covered": ("Later", p.later_shortfall_gbp),
-                "Overstocked": ("Overstocked", p.tied_up_gbp),
-                "Inbound arrives after horizon": ("Inbound", 0.0),
-            }.get(name)
-            found = next(
-                (f for f in p.flags if prefix and f.startswith(prefix[0])), None
-            )
-            if prefix and found:
-                rows.append((p, found, prefix[1]))
-    return sorted(rows, key=lambda r: -r[2])
-
-
 st.subheader("Flags")
 st.caption("Everything that needs a buyer's eye, grouped by type, biggest £ first.")
 groups = {
     "Lead time": "lost sales",
     "Budget not funded": "short",
     "Capacity blocks order": "lost sales",
-    "Later shortfall not covered": "later lost sales",
+    "Later shortfall not covered": "later shortfall",
     "Overstocked": "tied up",
     "Inbound arrives after horizon": "",
 }
-built = {name: flag_rows(name) for name in groups}
+built: dict[str, list[tuple[ProductResult, str, float]]] = {name: [] for name in groups}
+for p in result.products:
+    if gap := p.stockout:
+        span = month(gap.start_month) + (
+            f"–{month(gap.end_month)}" if gap.months > 1 else ""
+        )
+        built["Lead time"].append(
+            (p, f"Out of stock {span}: {number(gap.units)} units", gap.lost_sales_gbp)
+        )
+    if p.order and not p.order.funded:
+        built["Budget not funded"].append(
+            (p, f"Order of {number(p.order.qty)} units not funded", p.order.cost_gbp)
+        )
+    for flag in p.flags:
+        if flag.startswith("Capacity"):
+            built["Capacity blocks order"].append(
+                (p, flag, p.lost_sales_after_plan_gbp)
+            )
+        elif flag.startswith("Later"):
+            built["Later shortfall not covered"].append(
+                (p, flag, p.later_shortfall_gbp)
+            )
+        elif flag.startswith("Overstocked"):
+            built["Overstocked"].append((p, flag, p.tied_up_gbp))
+        else:
+            built["Inbound arrives after horizon"].append((p, flag, 0.0))
+built = {name: sorted(rows, key=lambda r: -r[2]) for name, rows in built.items()}
 for name in sorted(built, key=lambda n: -sum(r[2] for r in built[n])):
     rows = built[name]
     if not rows:

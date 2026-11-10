@@ -27,7 +27,7 @@ FACTOR_COLORS = {
     "budget": AMBER,
     "capacity": AMBER,
     "stock": SLATE,
-    "none": BLUE,
+    "none": MUTED,
 }
 
 CSS_FILE = Path(__file__).resolve().parents[3] / "assets" / "style.css"

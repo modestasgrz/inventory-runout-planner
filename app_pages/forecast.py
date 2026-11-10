@@ -50,7 +50,6 @@ figure.add_scatter(
     x=forecast_x,
     y=[r.closing for r in p.months],
     name="Stock, do nothing",
-    yaxis="y2",
     line={"color": theme.AMBER, "dash": "dash", "width": 2.5},
 )
 order_lands = p.order is not None and p.order.funded and p.plan_months != p.months
@@ -59,7 +58,6 @@ if order_lands:
         x=forecast_x,
         y=[r.closing for r in p.plan_months],
         name="Stock, with next order (funded)",
-        yaxis="y2",
         line={"color": theme.BLUE, "width": 3},
     )
 if p.runout_month:
@@ -70,16 +68,16 @@ figure.update_layout(
     template=theme.TEMPLATE,
     height=420,
     yaxis={
-        "title": "Demand (units)",
-        "range": [0, 1.1 * max([*history[-6:], *(r.demand for r in p.months), 1])],
-    },
-    yaxis2={
-        "title": "Stock (units)",
-        "overlaying": "y",
-        "side": "right",
-        "rangemode": "tozero",
-        "showgrid": False,
-        "tickformat": ".0f",
+        "title": "Units",
+        "range": [
+            0,
+            1.1
+            * max(
+                [*history[-6:], *(r.demand for r in p.months)]
+                + [r.closing for r in p.months + p.plan_months]
+                + [1]
+            ),
+        ],
     },
     xaxis={
         "dtick": "M2",

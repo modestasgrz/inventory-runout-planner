@@ -105,7 +105,14 @@ def expected_kpis(name: str) -> dict[str, tuple[str, str]]:
             month(k.earliest_runout_month)
             if k.earliest_runout_month
             else "None in horizon",
-            k.earliest_runout_code or "—",
+            next(
+                (
+                    p.description.title()
+                    for p in r.products
+                    if p.stock_code == k.earliest_runout_code
+                ),
+                "—",
+            ),
         ),
         "Spend": (gbp(k.funded_spend_gbp), f"of {gbp(k.budget_gbp)}"),
         "Unfunded": (
@@ -393,8 +400,11 @@ def test_overview_flags_include_every_core_flag() -> None:
 
 def test_overview_hero_matches_kpi() -> None:
     at = app()
-    k = run(load(DATA), PRESETS["Baseline"]).kpis
-    card = (month(k.earliest_runout_month or ""), k.earliest_runout_code or "")
+    r = run(load(DATA), PRESETS["Baseline"])
+    k = r.kpis
+    first = next(p for p in r.products if p.stock_code == k.earliest_runout_code)
+    card = (month(k.earliest_runout_month or ""), first.description.title())
+    assert first.stock_code not in card[1]
     assert kpis(at)["Earliest run-out"] == card
     assert f"({k.earliest_runout_code})" in md(at)
     at.switch_page("app_pages/forecast.py").run()
@@ -508,7 +518,8 @@ def test_theme_template_registered() -> None:
     assert theme.TEMPLATE == "runout_dark"
     assert "runout_dark" in pio.templates
     t = pio.templates["runout_dark"]
-    assert t.layout.paper_bgcolor == theme.SURFACE
+    assert t.layout.paper_bgcolor == theme.BG
+    assert t.layout.plot_bgcolor == theme.BG
     assert t.layout.font.color == theme.TEXT
 
 
@@ -527,7 +538,7 @@ def test_theme_tokens_match_dec17() -> None:
         "#F59E0B",
         "#EF4444",
     )
-    assert (theme.BG, theme.SURFACE, theme.TEXT) == ("#0B1730", "#13223F", "#E6ECF5")
+    assert (theme.BG, theme.SURFACE, theme.TEXT) == ("#0A0A0B", "#111113", "#EDEDEF")
     assert set(theme.FACTOR_COLORS) == {
         "lead time",
         "budget",

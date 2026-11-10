@@ -62,31 +62,24 @@ def apply() -> None:
 
 
 def styled(frame: pd.DataFrame) -> "pd.io.formats.style.Styler":
-    """Limiting factor as coloured text; unfunded rows amber-tinted with an amber Status, the same on every table."""
+    """Limiting factor as coloured text; Funded/Status text blue or amber; unfunded plan rows amber-tinted."""
     styler = frame.style
     if "Limiting factor" in frame.columns:
         styler = styler.map(
             lambda v: f"color: {FACTOR_COLORS.get(v, TEXT)}; font-weight: 600",
             subset=["Limiting factor"],
         )
-    if "Funded" in frame.columns and frame["Funded"].dtype == object:
+    for column in {"Funded", "Status"} & set(frame.columns):
         styler = styler.map(
             lambda v: (
                 f"color: {AMBER}; font-weight: 600"
                 if v == "Not funded"
                 else f"color: {BLUE}"
             ),
-            subset=["Funded"],
+            subset=[column],
         )
     if "Status" in frame.columns:
-        styler = styler.map(
-            lambda v: (
-                f"color: {AMBER}; font-weight: 600"
-                if v == "Not funded"
-                else f"color: {BLUE}"
-            ),
-            subset=["Status"],
-        ).apply(
+        styler = styler.apply(
             lambda row: (
                 [
                     "background-color: rgba(245, 158, 11, 0.12)"

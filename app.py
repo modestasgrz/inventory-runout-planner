@@ -155,21 +155,53 @@ first = next(
     (p for p in result.products if p.stock_code == k.earliest_runout_code), None
 )
 if navigation.title == "Overview":
+    count = len(result.products)
+    short = k.products_at_risk
+    runs_out = month(k.earliest_runout_month) if k.earliest_runout_month else ""
+    named = (
+        html.escape(first.description.title())
+        if first is not None and k.earliest_runout_month
+        else None
+    )
+    if short:
+        right_now = (
+            f"{number(short)} of {number(count)} products {'runs' if short == 1 else 'run'} short. "
+            + (f"The first, {named}, runs out {runs_out}. " if named else "")
+        )
+    else:
+        right_now = f"0 of {number(count)} products run short with the plan" + (
+            f" (without it, {named} would run out first, in {runs_out}). "
+            if named
+            else ". "
+        )
+    unfunded = k.unfunded_orders
+    right_now += (
+        f"The plan uses {gbp(k.funded_spend_gbp)}; "
+        + (
+            f"{number(unfunded)} {'order doesn' if unfunded == 1 else 'orders don'}'t fit ({gbp(k.unfunded_gbp)}), "
+            if unfunded
+            else "every order fits, "
+        )
+        + (
+            f"so {gbp(k.lost_sales_after_plan_gbp)} of sales are still lost."
+            if k.lost_sales_after_plan_gbp
+            else "and no sales are lost."
+        )
+    )
+    do_this = (
+        "Order the red-outlined product below first, then work down <i>Order now</i>. "
+        "The full buying list is in <i>Reorder plan</i>."
+        if short and named
+        else "Check the red-outlined product below; the full buying list is in <i>Reorder plan</i>."
+        if named
+        else "Nothing is urgent. The full buying list is in <i>Reorder plan</i>."
+    )
     st.markdown(
         '<div class="how-to-read">'
         f"<div><b>The question</b><span>Which products sell out in the next {scenario.horizon_months} months, "
         f"and what should we buy with the {gbp(k.budget_gbp)} budget to stop it?</span></div>"
-        f"<div><b>Right now</b><span>{number(k.products_at_risk)} of {number(len(result.products))} products "
-        "run short. "
-        + (
-            f"The first, {html.escape(first.description.title())}, runs out {month(k.earliest_runout_month)}. "
-            if first is not None and k.earliest_runout_month
-            else ""
-        )
-        + f"The plan uses {gbp(k.funded_spend_gbp)}; {number(k.unfunded_orders)} orders don't fit "
-        f"({gbp(k.unfunded_gbp)}), so {gbp(k.lost_sales_after_plan_gbp)} of sales are still lost.</span></div>"
-        "<div><b>Do this</b><span>Order the red-outlined product below first, then work down <i>Order now</i>. "
-        "The full buying list is in <i>Reorder plan</i>.</span></div></div>",
+        f"<div><b>Right now</b><span>{right_now}</span></div>"
+        f"<div><b>Do this</b><span>{do_this}</span></div></div>",
         unsafe_allow_html=True,
     )
 cards = [

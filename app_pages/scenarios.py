@@ -1,11 +1,14 @@
+from fractions import Fraction
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import ScenarioResult
+from inventory_runout_planner.planner import half_up
 from inventory_runout_planner.presets import PRESETS
 from inventory_runout_planner.ui import theme
-from inventory_runout_planner.ui.state import product_label, run_scenario
+from inventory_runout_planner.ui.state import run_scenario
 
 result: ScenarioResult = st.session_state["result"]
 directory: str = st.session_state["data_dir"]
@@ -22,48 +25,73 @@ st.caption(
 )
 
 s = result.scenario
-st.subheader("Current assumptions")
-st.dataframe(
-    pd.DataFrame(
-        [
-            ["Horizon", f"{s.horizon_months} months"],
-            ["Demand growth", f"{s.growth_pct:g} %"],
-            ["Supplier delay", f"{s.delay_weeks} weeks"],
-            ["Budget", gbp(s.budget_gbp)],
-            ["Safety stock", f"{s.safety_months:g} month(s) of demand"],
-            [
-                "Forecast method",
-                "Seasonal naive"
-                if s.method == "seasonal_naive"
-                else "Trailing 3-month average",
-            ],
-        ],
-        columns=["Input", "Value"],
-    ),
-    hide_index=True,
-    width="stretch",
+method = "Seasonal naive" if s.method == "seasonal_naive" else "Trailing 3-month"
+st.markdown(
+    '<div class="mini-stats">'
+    + "".join(
+        f'<div><span class="k">{label}</span><span class="v">{value}</span></div>'
+        for label, value in [
+            ("Horizon", f"{s.horizon_months} months"),
+            ("Demand growth", f"{s.growth_pct:g} %"),
+            ("Supplier delay", f"{s.delay_weeks} weeks"),
+            ("Budget", gbp(s.budget_gbp)),
+            ("Safety stock", f"{s.safety_months:g} month(s)"),
+            ("Forecast", method),
+        ]
+    )
+    + "</div>",
+    unsafe_allow_html=True,
 )
 
 st.subheader("Presets side by side")
 st.markdown("\n".join(f"- **{name}:** {lever}" for name, lever in LEVERS.items()))
 runs = {name: run_scenario(preset, directory) for name, preset in PRESETS.items()}
-descriptions = {p.stock_code: p.description for p in result.products}
-rows = []
-for name, r in runs.items():
-    k = r.kpis
-    rows.append(
+table = pd.DataFrame(
+    [
         {
             "Preset": name,
-            "Products at risk": number(k.products_at_risk),
-            "Earliest run-out": f"{month(k.earliest_runout_month)} · {product_label(descriptions[k.earliest_runout_code], k.earliest_runout_code)}"
-            if k.earliest_runout_month and k.earliest_runout_code
+            "Products at risk": r.kpis.products_at_risk,
+            "Unfunded orders": r.kpis.unfunded_orders,
+            "Unfunded £": half_up(Fraction(str(r.kpis.unfunded_gbp))),
+            "Lost sales £": half_up(Fraction(str(r.kpis.lost_sales_after_plan_gbp))),
+            "Stock-out months": r.kpis.stockout_months,
+            "Earliest run-out": f"{month(r.kpis.earliest_runout_month)} · {r.kpis.earliest_runout_code}"
+            if r.kpis.earliest_runout_month
             else "None",
-            "Funded": gbp(k.funded_spend_gbp),
-            "Suggested": gbp(k.suggested_spend_gbp),
-            "Unfunded orders": number(k.unfunded_orders),
         }
-    )
-st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        for name, r in runs.items()
+    ]
+)
+st.dataframe(
+    table.style.format(
+        {
+            column: (lambda v: gbp(float(str(v))))
+            if "£" in column
+            else (lambda v: number(float(str(v))))
+            for column in [
+                "Products at risk",
+                "Unfunded orders",
+                "Unfunded £",
+                "Lost sales £",
+                "Stock-out months",
+            ]
+        }
+    ),
+    hide_index=True,
+    width="stretch",
+    column_config={
+        "Preset": st.column_config.TextColumn(width="medium"),
+        "Products at risk": st.column_config.NumberColumn(width="small"),
+        "Unfunded £": st.column_config.NumberColumn(width="small"),
+        "Lost sales £": st.column_config.NumberColumn(
+            width="small",
+            help="Lost sales after plan = unmet units × median selling price, up to the end of each order's 3-month cover",
+        ),
+        "Stock-out months": st.column_config.NumberColumn(
+            help="Σ over products of months with unmet demand after the plan (same window)",
+        ),
+    },
+)
 
 figure = go.Figure()
 names = list(runs)
@@ -79,23 +107,28 @@ figure.add_bar(
     name="Funded within budget",
     marker_color=theme.BLUE,
 )
+for i, n in enumerate(names):
+    figure.add_shape(
+        type="line",
+        x0=i - 0.45,
+        x1=i + 0.45,
+        y0=runs[n].kpis.budget_gbp,
+        y1=runs[n].kpis.budget_gbp,
+        line={"color": theme.AMBER, "width": 3},
+    )
 figure.add_scatter(
-    x=names,
-    y=[runs[n].kpis.budget_gbp for n in names],
+    x=[None],
+    y=[None],
+    mode="lines",
     name="Budget",
-    mode="markers",
-    marker={
-        "color": theme.AMBER,
-        "size": 14,
-        "symbol": "line-ew-open",
-        "line": {"width": 4},
-    },
+    line={"color": theme.AMBER, "width": 3},
 )
 figure.update_layout(
     template=theme.TEMPLATE,
     barmode="overlay",
-    height=360,
+    height=340,
     yaxis={"tickprefix": "£"},
-    title="Spend by preset",
+    margin={"t": 10},
+    legend={"orientation": "h", "x": 1, "xanchor": "right", "y": 1.1},
 )
 st.plotly_chart(figure, width="stretch")

@@ -27,8 +27,24 @@ KPI_LABELS = [
     "Earliest run-out",
     "Purchase spend",
     "Unfunded orders",
-    "Stock value",
+    "Lost sales after plan",
 ]
+
+
+def spend_budget(at: AppTest) -> str:
+    """The Purchase spend card's sub-line ('of £budget')."""
+    return str(next(m for m in at.metric if m.label == "Purchase spend").proto.delta)
+
+
+def labels_for(page: str) -> list[str]:
+    """Overview leaves Earliest run-out to its hero block (DEC-14)."""
+    return [
+        x
+        for x in KPI_LABELS
+        if x != "Earliest run-out" or not page.endswith("overview.py")
+    ]
+
+
 NBSP = " "
 INVALID = [
     (
@@ -75,7 +91,8 @@ def app() -> AppTest:
 
 
 def kpis(at: AppTest) -> dict[str, str]:
-    return {m.label: str(m.value) for m in at.metric}
+    """KPI values without Earliest run-out, which Overview leaves to its hero block (DEC-14)."""
+    return {m.label: str(m.value) for m in at.metric if m.label != "Earliest run-out"}
 
 
 def errors(at: AppTest) -> list[str]:
@@ -89,18 +106,11 @@ def md(at: AppTest) -> str:
 def expected_kpis(name: str) -> dict[str, str]:
     data = load(DATA)
     k = run(data, PRESETS[name]).kpis
-    desc = {p.stock_code: p.description for p in data.products}
-    earliest = (
-        f"{month(k.earliest_runout_month)} · {product_label(desc[k.earliest_runout_code], k.earliest_runout_code)}"
-        if k.earliest_runout_code and k.earliest_runout_month
-        else "None in horizon"
-    )
     return {
         "Products at risk": number(k.products_at_risk),
-        "Earliest run-out": earliest,
-        "Purchase spend": f"{gbp(k.funded_spend_gbp)} of {gbp(k.budget_gbp)}",
+        "Purchase spend": gbp(k.funded_spend_gbp),
         "Unfunded orders": number(k.unfunded_orders),
-        "Stock value": gbp(k.stock_value_gbp),
+        "Lost sales after plan": gbp(k.lost_sales_after_plan_gbp),
     }
 
 
@@ -118,7 +128,7 @@ def test_preset_kpis_match_planner_and_identical_on_all_pages(name: str) -> None
     assert not at.exception
     assert at.selectbox(key="preset").value == name
     expected = expected_kpis(name)
-    assert [m.label for m in at.metric] == KPI_LABELS
+    assert [m.label for m in at.metric] == labels_for("overview.py")
     assert kpis(at) == expected
     for page in PAGES:
         at.switch_page(page).run()
@@ -218,7 +228,7 @@ def test_recovery_by_correcting_value_on_other_page() -> None:
     at = set_input(at, "budget_gbp", 50000)
     assert not at.exception
     assert errors(at) == []
-    assert kpis(at)["Purchase spend"].endswith(f"of {gbp(50000)}")
+    assert spend_budget(at) == f"of {gbp(50000)}"
     assert len(at.dataframe) >= 1
 
 
@@ -259,13 +269,14 @@ def test_boundary_combos_render_all_pages(combo: dict[str, Any]) -> None:
         at.switch_page(page).run()
         assert not at.exception, (combo, page)
         assert errors(at) == [], (combo, page)
-        assert [m.label for m in at.metric] == KPI_LABELS
+        assert [m.label for m in at.metric] == labels_for(page)
 
 
 def test_budget_zero_everything_unfunded() -> None:
     at = set_input(app(), "budget_gbp", 0)
     k = kpis(at)
-    assert k["Purchase spend"] == f"{gbp(0)} of {gbp(0)}"
+    assert k["Purchase spend"] == gbp(0)
+    assert spend_budget(at) == f"of {gbp(0)}"
     assert int(k["Unfunded orders"].replace(NBSP, "")) >= 1
     at.switch_page("app_pages/reorder_plan.py").run()
     assert f"Funded total: {gbp(0)}" in md(at)
@@ -322,9 +333,11 @@ def test_reorder_table_matches_plan(name: str) -> None:
     assert not at.exception
     df = at.dataframe[0].value
     assert len(df) == len(result.plan)
-    assert list(df["Rank"]) == list(range(1, len(result.plan) + 1))
+    ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
+    assert list(df["Urgency rank"]) == [line.rank for line in ordered]
+    assert sorted(df["Urgency rank"]) == list(range(1, len(result.plan) + 1))
     assert list(df.columns).index("Product") < list(df.columns).index("Code")
-    assert list(df["Code"]) == [line.stock_code for line in result.plan]
+    assert list(df["Code"]) == [line.stock_code for line in ordered]
     assert f"Funded total: {gbp(result.kpis.funded_spend_gbp)}" in md(at)
     assert len(at.get("download_button")) == 4
     assert sorted(b.proto.label for b in at.get("download_button")) == sorted(
@@ -357,19 +370,27 @@ def test_scenarios_table_has_five_presets(name: str) -> None:
 def test_overview_flags_include_every_core_flag() -> None:
     result = run(load(DATA), PRESETS["Baseline"])
     at = app()
-    flags = next(d.value for d in at.dataframe if "Flag" in d.value.columns)
-    assert list(flags.columns).index("Product") < list(flags.columns).index("Code")
-    shown = {(r.Code, r.Flag) for r in flags.itertuples()}
+    tables = [d.value for d in at.dataframe if "Flag" in d.value.columns]
+    assert all(
+        list(t.columns).index("Product") < list(t.columns).index("Code") for t in tables
+    )
+    shown = {(r.Code, r.Flag) for t in tables for r in t.itertuples()}
     for p in result.products:
         for flag in p.flags:
-            assert (p.stock_code, flag) in shown
-    assert len(shown) == len(flags)
+            assert (p.stock_code, flag) in shown, flag
+    labels = [e.label for e in at.expander]
+    assert any(label.startswith("Lead time · ") for label in labels)
 
 
 def test_overview_hero_matches_kpi() -> None:
     at = app()
-    earliest_label = kpis(at)["Earliest run-out"].split(" · ", 1)[1]
-    assert html.escape(earliest_label) in md(at) or earliest_label in md(at)
+    k = run(load(DATA), PRESETS["Baseline"]).kpis
+    at.switch_page("app_pages/forecast.py").run()
+    assert {m.label: str(m.value) for m in at.metric}["Earliest run-out"] == month(
+        k.earliest_runout_month or ""
+    )
+    at.switch_page("app_pages/overview.py").run()
+    assert f"({k.earliest_runout_code})" in md(at)
 
 
 def test_notice_and_attribution_on_all_pages() -> None:
@@ -377,8 +398,10 @@ def test_notice_and_attribution_on_all_pages() -> None:
     for page in PAGES:
         at.switch_page(page).run()
         assert "Synthetic stock data — demonstration only" in md(at)
-        assert "Planning as of 1 Dec 2011" in md(at)
-        assert "CC BY 4.0" in " ".join(str(c.value) for c in at.sidebar.caption)
+        assert "Data as of Dec 2011" in md(at)
+        side = " ".join(str(c.value) for c in at.sidebar.caption)
+        assert "Planning as of 1 Dec 2011" in side
+        assert "CC BY 4.0" in side
 
 
 def _copy_data(dest: Path) -> Path:

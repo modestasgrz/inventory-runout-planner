@@ -11,7 +11,6 @@ from inventory_runout_planner.ui import theme
 from inventory_runout_planner.ui.state import (
     DEFAULT_DATA_DIR,
     load_data,
-    product_label,
     run_scenario,
 )
 
@@ -112,13 +111,16 @@ with st.sidebar:
     )
     st.button("Reset to Baseline", key="reset", on_click=on_reset, width="stretch")
     st.divider()
+    st.caption(
+        "Planning as of 1 Dec 2011 · demand is real (UCI Online Retail II, last full month Nov 2011); stock on hand, "
+        "lead times, MOQ, unit cost, capacity and inbound orders are synthetic · money in GBP"
+    )
     st.caption(ATTRIBUTION)
 
-st.title(navigation.title)
 st.markdown(
-    '<div class="notice-row"><span class="synthetic-badge">Synthetic stock data — demonstration only</span>'
-    "<span>Planning as of 1 Dec 2011 · demand is real (UCI Online Retail II, last full month Nov 2011); stock on hand, "
-    "lead times, MOQ, unit cost, capacity and inbound orders are synthetic · money in GBP</span></div>",
+    f'<div class="page-head"><h1>{navigation.title}</h1>'
+    '<span class="synthetic-badge">Synthetic stock data — demonstration only</span>'
+    '<span class="as-of">Data as of Dec 2011</span></div>',
     unsafe_allow_html=True,
 )
 
@@ -143,42 +145,66 @@ st.session_state["result"] = result
 st.session_state["data_dir"] = directory
 
 k = result.kpis
-descriptions = {p.stock_code: p.description for p in result.products}
-earliest = (
-    f"{month(k.earliest_runout_month)} · {product_label(descriptions[k.earliest_runout_code], k.earliest_runout_code)}"
-    if k.earliest_runout_code and k.earliest_runout_month
-    else "None in horizon"
-)
 cards = [
     (
         "Products at risk",
         number(k.products_at_risk),
-        "Products at risk = products whose stock runs out within their lead time + 1 month if nothing is ordered, so the order must be placed now.",
+        None,
+        (
+            "Products at risk = products that still lose sales after the plan, before the next order's 3-month cover ends "
+            "(unfunded, lead-time blocked, capacity-blocked or too small an order)."
+        ),
     ),
     (
         "Earliest run-out",
-        earliest,
-        "Earliest run-out = first month where forecast demand > opening stock + inbound, if nothing is ordered (ties: higher value at risk first).",
+        month(k.earliest_runout_month)
+        if k.earliest_runout_month
+        else "None in horizon",
+        k.earliest_runout_code,
+        (
+            "Earliest run-out = first month where forecast demand > opening stock + inbound, if nothing is ordered "
+            "(ties: higher value at risk first)."
+        ),
     ),
     (
         "Purchase spend",
-        f"{gbp(k.funded_spend_gbp)} of {gbp(k.budget_gbp)}",
-        "Purchase spend = Σ (qty × unit cost) of funded orders; orders are funded in rank order while they fit the remaining budget.",
+        gbp(k.funded_spend_gbp),
+        f"of {gbp(k.budget_gbp)}",
+        (
+            "Purchase spend = Σ (qty × unit cost) of funded orders; orders are funded in rank order while they fit "
+            f"the remaining budget. Suggested in total: {gbp(k.suggested_spend_gbp)}."
+        ),
     ),
     (
         "Unfunded orders",
         number(k.unfunded_orders),
+        f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else None,
         "Unfunded orders = suggested orders whose cost > budget left when their turn in the ranking came.",
     ),
     (
-        "Stock value",
-        gbp(k.stock_value_gbp),
-        "Stock value = Σ stock on hand × unit cost (synthetic stock and cost).",
+        "Lost sales after plan",
+        gbp(k.lost_sales_after_plan_gbp),
+        f"{gbp(k.lost_sales_gbp)} if nothing ordered",
+        (
+            "Lost sales = unmet units × median selling price (real UCI prices). After plan = with the funded orders, "
+            f"up to the end of each order's 3-month cover; if nothing is ordered = whole horizon. "
+            f"Later shortfalls (need a further order): {gbp(k.later_shortfall_gbp)}, not included."
+        ),
     ),
 ]
-for column, (label, value, help_text) in zip(
-    st.columns([1.15, 2.2, 1.6, 1.1, 1.2]), cards, strict=True
+if navigation.title == "Overview":
+    cards.pop(1)
+for column, (label, value, sub, help_text) in zip(
+    st.columns(len(cards)), cards, strict=True
 ):
-    column.metric(label, value, help=help_text)
+    warn = label == "Unfunded orders" and k.unfunded_orders > 0
+    (column.container(key="kpi-warn") if warn else column).metric(
+        label,
+        value,
+        delta=sub,
+        delta_color="off",
+        delta_arrow="off",
+        help=help_text,
+    )
 
 navigation.run()

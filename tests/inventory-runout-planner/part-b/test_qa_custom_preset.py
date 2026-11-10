@@ -3,11 +3,10 @@ from typing import Any
 
 import pytest
 from inventory_runout_planner.data import load
-from inventory_runout_planner.fmt import gbp, month, number
+from inventory_runout_planner.fmt import gbp, number
 from inventory_runout_planner.models import Scenario, ScenarioResult
 from inventory_runout_planner.planner import run
 from inventory_runout_planner.presets import BASELINE, PRESETS
-from inventory_runout_planner.ui.state import product_label
 from streamlit.testing.v1 import AppTest
 
 REPO = Path(__file__).resolve().parents[3]
@@ -39,23 +38,17 @@ def app() -> AppTest:
 
 
 def kpis(at: AppTest) -> dict[str, str]:
-    return {m.label: str(m.value) for m in at.metric}
+    """KPI values without Earliest run-out, which Overview leaves to its hero block (DEC-14)."""
+    return {m.label: str(m.value) for m in at.metric if m.label != "Earliest run-out"}
 
 
 def expected(result: ScenarioResult) -> dict[str, str]:
     k = result.kpis
-    names = {p.stock_code: p.description for p in result.products}
-    earliest = (
-        f"{month(k.earliest_runout_month)} · {product_label(names[k.earliest_runout_code], k.earliest_runout_code)}"
-        if k.earliest_runout_code and k.earliest_runout_month
-        else "None in horizon"
-    )
     return {
         "Products at risk": number(k.products_at_risk),
-        "Earliest run-out": earliest,
-        "Purchase spend": f"{gbp(k.funded_spend_gbp)} of {gbp(k.budget_gbp)}",
+        "Purchase spend": gbp(k.funded_spend_gbp),
         "Unfunded orders": number(k.unfunded_orders),
-        "Stock value": gbp(k.stock_value_gbp),
+        "Lost sales after plan": gbp(k.lost_sales_after_plan_gbp),
     }
 
 

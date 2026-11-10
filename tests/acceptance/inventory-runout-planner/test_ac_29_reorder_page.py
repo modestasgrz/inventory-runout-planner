@@ -4,30 +4,34 @@ from inventory_runout_planner.presets import BASELINE
 from runout_toy import app, kpis, real_data, texts
 
 COLUMNS = [
-    "Urgency rank",
+    "#",
     "Product",
     "Code",
+    "Order",
     "Order month",
     "Arrives",
     "Qty",
     "Cost",
-    "Funded",
+    "Status",
     "Limiting factor",
 ]
 FILES = ["products.csv", "monthly_projection.csv", "scenario.csv", "reorder_plan.csv"]
 
 
 def test_ac_29_reorder_page() -> None:
-    """AC-29: Reorder plan lists every order sorted by order month then rank, with the DEC-15 columns (no Reason),
-    every reason on the page, 4 labelled downloads, 'Funded total: £X' matching the Purchase spend KPI, and the stock value."""
+    """AC-29: Reorder plan lists every order (follow-ups included) in rank order with title-case names and a Status
+    column, every reason, 4 labelled downloads, 'Funded total: £X' (= Spend KPI) and the stock value."""
     result = run(real_data(), BASELINE)
     at = app().run()
     at.switch_page("app_pages/reorder_plan.py").run()
     assert not at.exception
     plan = next(d.value for d in at.dataframe if list(d.value.columns) == COLUMNS)
-    ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
-    assert list(plan["Urgency rank"]) == [line.rank for line in ordered]
-    assert list(plan["Code"].astype(str)) == [line.stock_code for line in ordered]
+    assert list(plan["#"]) == [line.rank for line in result.plan]
+    assert list(plan["Code"].astype(str)) == [line.stock_code for line in result.plan]
+    assert list(plan["Product"]) == [line.description.title() for line in result.plan]
+    assert list(plan["Status"]) == [
+        "✓ Funded" if line.funded else "Not funded" for line in result.plan
+    ]
     main = texts(at.main)
     for line in result.plan:
         assert line.reason in main, line.stock_code
@@ -35,5 +39,5 @@ def test_ac_29_reorder_page() -> None:
     assert labels == sorted(f"Download {f}" for f in FILES)
     funded = gbp(result.kpis.funded_spend_gbp)
     assert f"Funded total: {funded}" in main
-    assert kpis(at)["Purchase spend"].startswith(funded)
+    assert kpis(at)["Spend"] == funded
     assert f"Stock value: {gbp(result.kpis.stock_value_gbp)}" in main

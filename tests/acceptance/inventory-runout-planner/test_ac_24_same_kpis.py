@@ -1,17 +1,14 @@
-from runout_toy import KPI_LABELS, OVERVIEW_KPI_LABELS, PAGES, app, kpis
+from runout_toy import KPI_LABELS, PAGES, app, kpis
 
 
 def test_ac_24_same_kpis() -> None:
-    """AC-24: every page renders under Baseline; Overview shows the KPIs without Earliest run-out, the others all 6;
-    each KPI value is identical on every page that shows it."""
+    """AC-24: every page (Overview included) renders under Baseline with the same 5 KPI metrics, identical everywhere."""
     at = app().run()
-    seen: dict[str, set[str]] = {}
+    seen = []
     for page in PAGES:
         at.switch_page(page).run()
         assert not at.exception, page
         values = kpis(at)
-        wanted = OVERVIEW_KPI_LABELS if page.endswith("overview.py") else KPI_LABELS
-        assert list(values) == wanted, page
-        for label, value in values.items():
-            seen.setdefault(label, set()).add(value)
-    assert all(len(v) == 1 for v in seen.values()), seen
+        assert list(values) == KPI_LABELS, page
+        seen.append(values)
+    assert all(v == seen[0] for v in seen)

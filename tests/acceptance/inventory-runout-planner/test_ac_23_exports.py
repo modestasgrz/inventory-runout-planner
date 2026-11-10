@@ -1,6 +1,8 @@
+from typing import Any
+
+from inventory_runout_planner import planner
 from inventory_runout_planner.exports import tables
 from inventory_runout_planner.models import Kpis, Product, ReorderLine, Scenario
-from inventory_runout_planner.planner import run
 from runout_toy import product, scenario, toy_data
 
 
@@ -11,7 +13,8 @@ def test_ac_23_exports() -> None:
         product("T0002", lead_time_weeks=10),
         product("T0003", unit_cost=1.00),
     )
-    result = run(data, scenario(budget_gbp=650))
+    run: Any = planner.run
+    result = run(data, scenario(budget_gbp=650), max_orders=1)
     out = tables(data, result)
     assert list(out) == [
         "products.csv",

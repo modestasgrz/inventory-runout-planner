@@ -32,14 +32,8 @@ PAGES = [
     "app_pages/reorder_plan.py",
     "app_pages/methodology.py",
 ]
-KPI_LABELS = [
-    "Products at risk",
-    "Earliest run-out",
-    "Purchase spend",
-    "Unfunded orders",
-    "Lost sales after plan",
-]
-OVERVIEW_KPI_LABELS = [label for label in KPI_LABELS if label != "Earliest run-out"]
+KPI_LABELS = ["At risk", "Earliest run-out", "Spend", "Unfunded", "Lost sales"]
+BUDGET_LABEL = "Purchase budget (£, whole horizon)"
 PRESET_NAMES = [
     "Baseline",
     "Peak season +25%",
@@ -98,10 +92,19 @@ def toy_data(
     )
 
 
-def toy_run(*products: "Product", **scenario_overrides: Any) -> "ScenarioResult":
-    from inventory_runout_planner.planner import run
+def toy_run(
+    *products: "Product", max_orders: int = 1, **scenario_overrides: Any
+) -> "ScenarioResult":
+    """Hand cases run with one order per product unless a test asks for more (DEC-21)."""
+    from inventory_runout_planner import planner
+    from inventory_runout_planner.models import ScenarioResult
 
-    return run(toy_data(*products), scenario(**scenario_overrides))
+    run: Any = planner.run
+    result = run(
+        toy_data(*products), scenario(**scenario_overrides), max_orders=max_orders
+    )
+    assert isinstance(result, ScenarioResult)
+    return result
 
 
 def real_data() -> "PlannerData":

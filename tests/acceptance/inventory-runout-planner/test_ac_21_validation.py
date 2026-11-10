@@ -21,7 +21,7 @@ def test_ac_21_validation() -> None:
     assert scenario_errors(bad) == [
         "Demand growth (%) must be between -50 and 100 — you entered 150.",
         "Supplier delay (weeks) must be between 0 and 26 — you entered 30.",
-        "Budget (£) must be between 0 and 1 000 000 — you entered -100.",
+        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000 — you entered -100.",
         "Safety stock (months) must be between 0 and 6 — you entered -1.",
     ]
     assert scenario_errors(VALID) == []

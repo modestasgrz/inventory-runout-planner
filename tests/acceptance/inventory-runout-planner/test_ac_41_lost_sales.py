@@ -2,16 +2,15 @@ from runout_toy import of, product, toy_run
 
 
 def test_ac_41_lost_sales() -> None:
-    """AC-41: lost sales if nothing ordered / after plan at the median selling price; £ tied up for overstock; KPI sums."""
+    """AC-41: lost sales if nothing ordered / with the plan over the whole horizon (one order), £ tied up, KPI sums."""
     funded = of(toy_run(product("T0001")), "T0001").model_dump()
     assert funded["sell_price"] == 5.00
     assert funded["lost_sales_gbp"] == 1300.00
-    assert funded["lost_sales_after_plan_gbp"] == 0.00
-    assert funded["at_risk_after_plan"] is False
+    assert funded["lost_sales_after_plan_gbp"] == 300.00
+    assert funded["at_risk_after_plan"] is True
     assert funded["tied_up_gbp"] == 0.00
     unfunded = of(toy_run(product("T0001"), budget_gbp=300), "T0001").model_dump()
     assert unfunded["lost_sales_after_plan_gbp"] == 1300.00
-    assert unfunded["at_risk_after_plan"] is True
     over = of(
         toy_run(product("T0005", stock_on_hand=1000), horizon_months=12), "T0005"
     ).model_dump()

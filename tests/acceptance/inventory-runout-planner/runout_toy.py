@@ -38,7 +38,6 @@ KPI_LABELS = [
     "Purchase spend",
     "Unfunded orders",
     "Lost sales after plan",
-    "Stock value",
 ]
 OVERVIEW_KPI_LABELS = [label for label in KPI_LABELS if label != "Earliest run-out"]
 PRESET_NAMES = [

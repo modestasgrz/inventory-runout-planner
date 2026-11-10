@@ -4,8 +4,8 @@ from runout_toy import of, product, real_data, toy_run
 
 
 def test_ac_35_at_risk_order_now() -> None:
-    """AC-35: products at risk = run-out within lead months + 1 (T0001, T0002 yes; T0006, T0005 no);
-    real data: Baseline at risk < Supplier delay +3 weeks, and at most 10."""
+    """AC-35: order now = run-out within lead months + 1 (T0001, T0002 yes; T0006, T0005 no);
+    real data: Baseline order-now count < Supplier delay +3 weeks, and at most 10."""
     result = toy_run(
         product("T0001"),
         product("T0002", lead_time_weeks=10),

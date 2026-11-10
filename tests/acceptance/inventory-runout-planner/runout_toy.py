@@ -37,8 +37,10 @@ KPI_LABELS = [
     "Earliest run-out",
     "Purchase spend",
     "Unfunded orders",
+    "Lost sales after plan",
     "Stock value",
 ]
+OVERVIEW_KPI_LABELS = [label for label in KPI_LABELS if label != "Earliest run-out"]
 PRESET_NAMES = [
     "Baseline",
     "Peak season +25%",
@@ -81,14 +83,19 @@ def scenario(**overrides: Any) -> "Scenario":
 
 
 def toy_data(
-    *products: "Product", history: dict[str, list[int]] | None = None
+    *products: "Product",
+    history: dict[str, list[int]] | None = None,
+    prices: dict[str, float] | None = None,
 ) -> "PlannerData":
     from inventory_runout_planner.models import PlannerData
 
-    return PlannerData(
-        products=list(products),
-        history=history or {p.stock_code: [60] * 24 for p in products},
-        history_months=MONTHS,
+    return PlannerData.model_validate(
+        {
+            "products": list(products),
+            "history": history or {p.stock_code: [60] * 24 for p in products},
+            "history_months": MONTHS,
+            "prices": prices or {p.stock_code: 5.00 for p in products},
+        }
     )
 
 

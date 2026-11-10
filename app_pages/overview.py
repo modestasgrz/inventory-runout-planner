@@ -138,7 +138,9 @@ st.plotly_chart(figure, width="stretch")
 
 
 st.subheader("Flags")
-st.caption("Everything that needs a buyer's eye, grouped by type, biggest £ first.")
+st.caption(
+    "Everything that needs a buyer's eye, grouped by type: lead time first (it needs action now), then biggest £ first."
+)
 groups = {
     "Lead time": "lost sales",
     "Budget not funded": "short",
@@ -174,7 +176,9 @@ for p in result.products:
         else:
             built["Inbound arrives after horizon"].append((p, flag, 0.0))
 built = {name: sorted(rows, key=lambda r: -r[2]) for name, rows in built.items()}
-for name in sorted(built, key=lambda n: -sum(r[2] for r in built[n])):
+for name in sorted(
+    built, key=lambda n: (n != "Lead time", -sum(r[2] for r in built[n]))
+):
     rows = built[name]
     if not rows:
         continue

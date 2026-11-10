@@ -215,7 +215,9 @@ def test_overview_flag_groups_match_core(case: str, real: PlannerData) -> None:
     shown = [e for e in at.expander if e.label.split(" · ")[0] in FLAG_TYPES]
     names = [e.label.split(" · ")[0] for e in shown]
     assert sorted(names) == sorted(expected), case
-    totals = [expected[n][1] for n in names]
+    if "Lead time" in names:
+        assert names[0] == "Lead time", (case, names)
+    totals = [expected[n][1] for n in names if n != "Lead time"]
     assert totals == sorted(totals, reverse=True), (case, names, totals)
     for e in shown:
         parts = e.label.split(" · ")
@@ -536,9 +538,9 @@ def test_toy_flag_groups_every_type(
         for e in at.expander
         if e.label.split(" · ")[0] in FLAG_TYPES
     ]
-    assert [expected[n][1] for n in order] == sorted(
-        (expected[n][1] for n in order), reverse=True
-    )
+    assert order[0] == "Lead time"
+    rest = [expected[n][1] for n in order[1:]]
+    assert rest == sorted(rest, reverse=True)
     assert (
         shown["Budget not funded"].split(" · ")[2].startswith(gbp(r.kpis.unfunded_gbp))
     )

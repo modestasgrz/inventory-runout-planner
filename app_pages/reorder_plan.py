@@ -12,9 +12,10 @@ data: PlannerData = st.session_state["data"]
 k = result.kpis
 
 st.caption(
-    "The next order per product, listed by order month. Urgency rank = run-out month, then value at risk "
-    "(unmet units × unit cost); orders are funded in urgency order, and one that doesn't fit the budget left is skipped "
-    "so smaller ones below it can still be funded. Unfunded rows are tinted amber."
+    "Every order in the plan, most urgent first (#): the month it prevents a shortfall, then value at risk "
+    "(unmet units × unit cost). Order 1 is the next order; 2–4 are follow-ups for later dips in the horizon. "
+    "Orders are funded in that order while they fit the budget left; a follow-up is funded only if the order "
+    "before it is. Unfunded rows are tinted amber."
 )
 
 st.markdown(
@@ -52,72 +53,78 @@ st.caption(
     "tops stock back up to safety stock before it would dip below it."
 )
 
-ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
 st.dataframe(
     theme.styled(
         pd.DataFrame(
             [
                 {
-                    "Urgency rank": line.rank,
-                    "Product": line.description,
+                    "#": line.rank,
+                    "Product": line.description.title(),
                     "Code": line.stock_code,
+                    "Order": line.order_no,
                     "Order month": month(line.order_month),
                     "Arrives": month(line.arrival_month),
-                    "Qty": number(line.qty),
-                    "Cost": gbp(line.cost_gbp),
-                    "Funded": line.funded,
+                    "Qty": line.qty,
+                    "Cost": line.cost_gbp,
+                    "Status": "✓ Funded" if line.funded else "Not funded",
                     "Limiting factor": line.limiting_factor,
                 }
-                for line in ordered
+                for line in result.plan
             ],
             columns=[
-                "Urgency rank",
+                "#",
                 "Product",
                 "Code",
+                "Order",
                 "Order month",
                 "Arrives",
                 "Qty",
                 "Cost",
-                "Funded",
+                "Status",
                 "Limiting factor",
             ],
         )
+    ).format(
+        {
+            "Qty": lambda v: number(float(str(v))),
+            "Cost": lambda v: gbp(float(str(v))),
+        }
     ),
     hide_index=True,
     width="stretch",
-    height=35 * len(ordered) + 38,
+    height=35 * 12 + 38,
     column_config={
-        "Urgency rank": st.column_config.NumberColumn(
-            width="small",
-            help="1 = most urgent: earliest run-out, then highest value at risk",
+        "#": st.column_config.NumberColumn(
+            width=45, help="Urgency rank: earliest shortfall first, then value at risk"
         ),
-        "Product": st.column_config.TextColumn(width=240),
+        "Product": st.column_config.TextColumn(width=250),
+        "Code": st.column_config.TextColumn(width=70),
+        "Order": st.column_config.NumberColumn(
+            width=60, help="1 = the next order, 2–4 = follow-up orders"
+        ),
         "Order month": st.column_config.TextColumn(width=95),
-        "Arrives": st.column_config.TextColumn(width="small"),
-        "Limiting factor": st.column_config.TextColumn(width=100),
-        "Code": st.column_config.TextColumn(width="small"),
-        "Qty": st.column_config.TextColumn(width="small", alignment="right"),
-        "Cost": st.column_config.TextColumn(width="small", alignment="right"),
-        "Funded": st.column_config.CheckboxColumn(width="small"),
+        "Arrives": st.column_config.TextColumn(width=85),
+        "Status": st.column_config.TextColumn(width=95),
     },
 )
 
 with st.expander("Why each order: the numbers behind every line"):
     for line in result.plan:
         st.markdown(
-            f"**{line.rank}. {product_label(line.description, line.stock_code)}** — {line.reason}"
+            f"**{line.rank}. {product_label(line.description, line.stock_code)}, order {line.order_no}** — {line.reason}"
         )
 
 st.subheader("Exports")
 st.caption(
     "Raw numbers, ready for a spreadsheet. Stock fields are synthetic and labelled so in products.csv."
 )
-columns = st.columns(2) * 2
-for column, (name, frame) in zip(columns, tables(data, result).items(), strict=True):
+for column, (name, frame) in zip(
+    st.columns(4), tables(data, result).items(), strict=True
+):
     column.download_button(
         f"Download {name}",
         frame.to_csv(index=False),
         file_name=name,
         mime="text/csv",
-        width="stretch",
+        type="tertiary",
     )

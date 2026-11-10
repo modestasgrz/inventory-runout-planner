@@ -1,10 +1,11 @@
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import MonthRow, PlannerData, ScenarioResult
+from inventory_runout_planner.planner import backtest
 from inventory_runout_planner.ui import theme
 from inventory_runout_planner.ui.state import product_label
+from plotly.subplots import make_subplots
 
 result: ScenarioResult = st.session_state["result"]
 data: PlannerData = st.session_state["data"]
@@ -31,67 +32,108 @@ st.caption(
 )
 
 history = data.history[p.stock_code]
-figure = go.Figure()
+error = backtest(data, result.scenario.method).overall_pct / 100
+forecast_x = [f"{r.month}-01" for r in p.months]
+figure = make_subplots(
+    rows=2,
+    cols=1,
+    shared_xaxes=True,
+    vertical_spacing=0.08,
+    row_heights=[0.55, 0.45],
+    subplot_titles=["Demand (units)", "Stock at month end (units)"],
+)
 figure.add_bar(
     x=[f"{m}-01" for m in data.history_months],
     y=history,
     name="Actual demand (UCI)",
     marker_color=theme.MUTED,
     opacity=0.55,
+    row=1,
+    col=1,
 )
-forecast_x = [f"{r.month}-01" for r in p.months]
+figure.add_scatter(
+    x=forecast_x + forecast_x[::-1],
+    y=[r.demand * (1 + error) for r in p.months]
+    + [max(0.0, r.demand * (1 - error)) for r in p.months][::-1],
+    fill="toself",
+    fillcolor="rgba(230, 236, 245, 0.10)",
+    line={"width": 0},
+    hoverinfo="skip",
+    name=f"Range from last year's forecast error (±{error:.0%})",
+    row=1,
+    col=1,
+)
 figure.add_scatter(
     x=forecast_x,
     y=[r.demand for r in p.months],
     name="Forecast demand",
     line={"color": theme.TEXT, "dash": "dot", "width": 1.5},
+    row=1,
+    col=1,
 )
 figure.add_scatter(
     x=forecast_x,
     y=[r.closing for r in p.months],
     name="Stock, do nothing",
-    line={"color": theme.AMBER, "dash": "dash", "width": 2.5},
+    line={"color": theme.RED, "dash": "dash", "width": 2},
+    row=2,
+    col=1,
 )
-order_lands = p.order is not None and p.order.funded and p.plan_months != p.months
-if order_lands:
-    figure.add_scatter(
-        x=forecast_x,
-        y=[r.closing for r in p.plan_months],
-        name="Stock, with next order (funded)",
-        line={"color": theme.BLUE, "width": 3},
-    )
-if p.runout_month:
-    figure.add_vline(
-        x=f"{p.runout_month}-01", line={"color": theme.SLATE, "dash": "dot"}
-    )
+figure.add_scatter(
+    x=forecast_x,
+    y=[r.closing for r in p.plan_months],
+    name="Stock, with the plan",
+    line={"color": theme.BLUE, "width": 3},
+    row=2,
+    col=1,
+)
+for r in p.plan_months:
+    if r.unmet:
+        figure.add_vrect(
+            x0=f"{r.month}-01",
+            x1=f"{r.month}-28",
+            fillcolor=theme.RED,
+            opacity=0.12,
+            line_width=0,
+            row=2,
+            col=1,
+        )
+figure.add_vline(
+    x=f"{p.months[0].month}-01", line={"color": theme.MUTED, "dash": "dot"}
+)
+figure.add_annotation(
+    x=f"{p.months[0].month}-01",
+    y=1.02,
+    yref="paper",
+    text="Today (1 Dec 2011)",
+    showarrow=False,
+    font={"color": theme.MUTED, "size": 11},
+)
+visible = [*history[-6:], *(r.demand * (1 + error) for r in p.months), 1]
 figure.update_layout(
     template=theme.TEMPLATE,
-    height=420,
-    yaxis={
-        "title": "Units",
-        "range": [
-            0,
-            1.1
-            * max(
-                [*history[-6:], *(r.demand for r in p.months)]
-                + [r.closing for r in p.months + p.plan_months]
-                + [1]
-            ),
-        ],
-    },
-    xaxis={
-        "dtick": "M2",
-        "tickformat": "%b %Y",
-        "range": [f"{data.history_months[-6]}-01", f"{p.months[-1].month}-15"],
-    },
-    legend={"orientation": "h", "x": 1, "xanchor": "right", "y": 1.08},
-    margin={"t": 60},
-    title=f"{product_label(p.description, p.stock_code)} · monthly units",
+    height=560,
+    legend={"orientation": "h", "x": 0, "y": -0.08},
+    margin={"t": 70},
+    title=f"{product_label(p.description, p.stock_code)}",
+)
+figure.update_yaxes(range=[0, 1.1 * max(visible)], row=1, col=1)
+figure.update_yaxes(rangemode="tozero", row=2, col=1)
+figure.update_xaxes(
+    dtick="M2",
+    tickformat="%b %Y",
+    range=[f"{data.history_months[-6]}-01", f"{p.months[-1].month}-15"],
 )
 st.plotly_chart(figure, width="stretch")
+st.caption(
+    f"Shaded band = forecast × (1 ± {error:.0%}), the weighted forecast error (WAPE) of this method last year, "
+    "floored at 0. Red months below = unmet demand even with the plan."
+)
 
-if p.order:
-    st.markdown(f"**Next order** · {p.order.reason}")
+if p.orders:
+    for line in p.orders:
+        status = "funded" if line.funded else "not funded"
+        st.markdown(f"**Order {line.order_no}** ({status}) · {line.reason}")
 else:
     st.markdown(
         f"**No order suggested** · limiting factor: {p.limiting_factor}. {' '.join(p.flags)}"
@@ -126,15 +168,15 @@ st.dataframe(
     width="stretch",
     height=35 * len(p.months) + 38,
 )
-if order_lands:
-    with st.expander("Projection with the next order"):
+if p.plan_months != p.months:
+    with st.expander("Projection with the plan (every funded order)"):
         st.dataframe(
             table(p.plan_months),
             hide_index=True,
             width="stretch",
             height=35 * len(p.plan_months) + 38,
         )
-elif p.order:
+elif p.orders:
     st.caption(
-        "The next order is not funded or arrives after the horizon, so the projection with it is the same as above."
+        "No funded order arrives inside the horizon, so the projection with the plan is the same as above."
     )

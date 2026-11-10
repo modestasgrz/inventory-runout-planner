@@ -1,12 +1,14 @@
 """Inventory run-out planner: entry file with the shared sidebar, notices and KPI strip (DEC-14, DEC-15)."""
 
 import os
+from fractions import Fraction
 
 import streamlit as st
 from inventory_runout_planner.data import DataError
 from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import Scenario, scenario_errors
-from inventory_runout_planner.presets import ATTRIBUTION, PRESETS
+from inventory_runout_planner.planner import backtest, half_up
+from inventory_runout_planner.presets import PRESETS
 from inventory_runout_planner.ui import theme
 from inventory_runout_planner.ui.state import (
     DEFAULT_DATA_DIR,
@@ -93,7 +95,11 @@ with st.sidebar:
         "Supplier delay (weeks)", key="delay_weeks", step=1, on_change=on_edit
     )
     st.number_input(
-        "Budget (£)", key="budget_gbp", step=1000.0, format="%.0f", on_change=on_edit
+        "Purchase budget (£, whole horizon)",
+        key="budget_gbp",
+        step=1000.0,
+        format="%.0f",
+        on_change=on_edit,
     )
     st.number_input(
         "Safety stock (months)",
@@ -111,18 +117,8 @@ with st.sidebar:
     )
     st.button("Reset to Baseline", key="reset", on_click=on_reset, width="stretch")
     st.divider()
-    st.caption(
-        "Planning as of 1 Dec 2011 · demand is real (UCI Online Retail II, last full month Nov 2011); stock on hand, "
-        "lead times, MOQ, unit cost, capacity and inbound orders are synthetic · money in GBP"
-    )
-    st.caption(ATTRIBUTION)
-
-st.markdown(
-    f'<div class="page-head"><h1>{navigation.title}</h1>'
-    '<span class="synthetic-badge">Synthetic stock data — demonstration only</span>'
-    '<span class="as-of">Data as of Dec 2011</span></div>',
-    unsafe_allow_html=True,
-)
+    st.caption("Planning as of 1 Dec 2011 · money in GBP")
+    st.caption("Demand: UCI Online Retail II (CC BY 4.0) · stock data synthetic")
 
 directory = os.environ.get("RUNOUT_DATA_DIR", str(DEFAULT_DATA_DIR))
 try:
@@ -145,14 +141,23 @@ st.session_state["result"] = result
 st.session_state["data_dir"] = directory
 
 k = result.kpis
+wape = half_up(Fraction(str(backtest(data, scenario.method).overall_pct)))
+st.markdown(
+    f'<div class="page-head"><h1>{navigation.title}</h1>'
+    '<span class="synthetic-badge">Synthetic stock data — demonstration only</span>'
+    '<span class="as-of">Data as of Dec 2011</span>'
+    f'<span class="chip" title="Weighted forecast error (WAPE) of this forecast method last year: forecast made in '
+    f'Dec 2010 vs what sold in Dec 2010–Nov 2011. Details on Methodology.">Forecast error {wape}% ⓘ</span></div>',
+    unsafe_allow_html=True,
+)
 cards = [
     (
-        "Products at risk",
+        "At risk",
         number(k.products_at_risk),
-        None,
+        f"of {number(len(result.products))} products",
         (
-            "Products at risk = products that still lose sales after the plan, before the next order's 3-month cover ends "
-            "(unfunded, lead-time blocked, capacity-blocked or too small an order)."
+            "At risk = products that still have unmet demand in some month of the horizon with the plan "
+            "(lead time, unfunded orders, capacity, or more than 4 orders needed)."
         ),
     ),
     (
@@ -160,44 +165,44 @@ cards = [
         month(k.earliest_runout_month)
         if k.earliest_runout_month
         else "None in horizon",
-        k.earliest_runout_code,
+        k.earliest_runout_code or "—",
         (
             "Earliest run-out = first month where forecast demand > opening stock + inbound, if nothing is ordered "
             "(ties: higher value at risk first)."
         ),
     ),
     (
-        "Purchase spend",
+        "Spend",
         gbp(k.funded_spend_gbp),
         f"of {gbp(k.budget_gbp)}",
         (
-            "Purchase spend = Σ (qty × unit cost) of funded orders; orders are funded in rank order while they fit "
+            "Spend = Σ (qty × unit cost) of funded orders; orders are funded in urgency order while they fit "
             f"the remaining budget. Suggested in total: {gbp(k.suggested_spend_gbp)}."
         ),
     ),
     (
-        "Unfunded orders",
+        "Unfunded",
         number(k.unfunded_orders),
-        f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else None,
-        "Unfunded orders = suggested orders whose cost > budget left when their turn in the ranking came.",
+        f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else "none",
+        (
+            "Unfunded = suggested orders whose cost > budget left when their turn came, "
+            "or follow-ups whose earlier order wasn't funded."
+        ),
     ),
     (
-        "Lost sales after plan",
+        "Lost sales",
         gbp(k.lost_sales_after_plan_gbp),
         f"{gbp(k.lost_sales_gbp)} if nothing ordered",
         (
-            "Lost sales = unmet units × median selling price (real UCI prices). After plan = with the funded orders, "
-            f"up to the end of each order's 3-month cover; if nothing is ordered = whole horizon. "
-            f"Later shortfalls (need a further order): {gbp(k.later_shortfall_gbp)}, not included."
+            "Lost sales = unmet units × median selling price (real UCI prices), over the whole horizon, "
+            f"with every funded order. If nothing is ordered: {gbp(k.lost_sales_gbp)}."
         ),
     ),
 ]
-if navigation.title == "Overview":
-    cards.pop(1)
 for column, (label, value, sub, help_text) in zip(
     st.columns(len(cards)), cards, strict=True
 ):
-    warn = label == "Unfunded orders" and k.unfunded_orders > 0
+    warn = label == "Unfunded" and k.unfunded_orders > 0
     (column.container(key="kpi-warn") if warn else column).metric(
         label,
         value,

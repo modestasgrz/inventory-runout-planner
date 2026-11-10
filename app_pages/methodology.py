@@ -38,31 +38,35 @@ st.markdown(
 - Each month: available = opening + inbound · shipped = min(demand, available) · unmet = demand − shipped · closing = available − shipped. Stock never goes negative; a shortfall is unmet demand.
 - **Run-out month** = the first month with unmet demand. **Value at risk** = unmet units over the horizon × unit cost.
 
-### Next order per product
+### Orders per product
 - Safety stock (units) = safety months × that month's forecast, rounded half up.
 - Trigger = first month where closing stock < safety stock, or demand is unmet. Order month = max(Dec 2011, trigger − lead months); it arrives lead months later.
 - Quantity = forecast of the 3 months from arrival + safety stock at arrival − stock available at arrival, at least the MOQ, at most the free warehouse capacity
   (capacity − available). If the free capacity is below the MOQ, no order is possible.
-- **Ranking:** run-out month (earliest first; no run-out last) → value at risk (highest first) → product code.
-- **Budget:** orders are funded in rank order while their cost fits the budget left; an order that doesn't fit is skipped and the next one is tried.
+- **Follow-up orders:** up to 4 orders per product (about one a quarter). After each order, stock is projected again with it;
+  the next order is triggered by the next month below safety stock after that order arrives, and sized the same way.
+- **Ranking (urgency, #):** the month the order prevents a shortfall (earliest first; a safety-stock dip only, last) →
+  value at risk (highest first) → product code → order number.
+- **Budget:** the purchase budget covers the whole horizon. Orders are funded in urgency order while their cost fits the
+  budget left; an order that doesn't fit is skipped and the next one is tried. A follow-up is funded only if the order before it is.
 - **Limiting factor:** no run-out → *none*; the order would arrive after the run-out → *lead time*; no order fits the warehouse → *capacity*;
   the order isn't funded → *budget*; otherwise *stock* (ordering now prevents the run-out).
 
 ### Money
 - **Lost sales = unmet units × median selling price** (the product's real median price in the UCI data).
-  *If nothing is ordered*: unmet units over the whole horizon. *After plan*: unmet units with the funded orders,
-  up to the end of each order's 3-month cover (the month it arrives + 2); with no funded order, the whole horizon.
-- **Later shortfall not covered**: unmet units after that cover ends, which need a further order. The plan holds only
-  the next order per product, so these are flagged with their own £ and not counted in lost sales after plan.
+  *If nothing is ordered*: unmet units over the whole horizon. *With the plan* (the headline): unmet units over the
+  whole horizon with every funded order.
+- **Short after plan**: unmet units left with the plan outside the lead-time stock-out (unfunded follow-ups, capacity,
+  or a dip after the 4th order), flagged with their own £. They are part of lost sales.
 - **Out of stock (lead time)**: when an order can't arrive before the run-out, the months from the run-out until it
   arrives (or to the horizon if nothing arrives), their unmet units and lost sales.
 - **£ tied up = (stock on hand − 6 months of average forecast) × unit cost**, for overstocked products.
 
 ### KPIs
-- **Products at risk** = products that still lose sales after the plan (unfunded, lead-time or capacity blocked, or an order too small to cover), within that cover window.
+- **At risk** = products with unmet demand in some month of the horizon, even with the plan.
 - **Order now** (Overview table) = products that run out within their lead time + 1 month if nothing is ordered.
 - **Earliest run-out** = the product with the earliest run-out month (ties: higher value at risk).
-- **Purchase spend** = Σ cost of funded orders, shown against the budget. **Unfunded orders** = suggested orders not funded. **Stock value** = Σ stock on hand × unit cost (on Reorder plan).
+- **Spend** = Σ cost of funded orders, shown against the budget. **Unfunded** = suggested orders not funded. **Stock value** = Σ stock on hand × unit cost (on Reorder plan).
 - **Overstocked** flag = stock on hand > 6 months of average forecast demand.
 """
 )
@@ -80,7 +84,9 @@ st.markdown(
     f"- Weighted forecast error (WAPE), trailing 3-month: {whole(trailing.overall_pct)}%\n"
     f"- Plain average of per-product MAPE, seasonal naive: {whole(sum(mapes) / len(mapes))}% — inflated: MAPE divides "
     "each month's error by that month's sales, so a month with a handful of sales and a normal forecast scores "
-    "hundreds or thousands of percent."
+    "hundreds or thousands of percent.\n\n"
+    "The Forecast page draws a **range from last year's forecast error**: band = forecast × (1 ± WAPE) of the selected "
+    "method, floored at 0."
 )
 trailing_mape = {r.stock_code: r.mape_pct for r in trailing.rows}
 st.dataframe(
@@ -101,7 +107,7 @@ st.dataframe(
     ),
     hide_index=True,
     width="stretch",
-    height=300,
+    height=35 * 36 + 38,
     column_config={
         "Product": st.column_config.TextColumn(width="large"),
         "Code": st.column_config.TextColumn(width="small"),

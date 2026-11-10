@@ -1,16 +1,14 @@
 import html
-from fractions import Fraction
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from inventory_runout_planner.fmt import gbp, month, number
-from inventory_runout_planner.models import PlannerData, ProductResult, ScenarioResult
-from inventory_runout_planner.planner import backtest, half_up, month_key
+from inventory_runout_planner.models import ProductResult, ScenarioResult
+from inventory_runout_planner.planner import month_key
 from inventory_runout_planner.ui import theme
 
 result: ScenarioResult = st.session_state["result"]
-data: PlannerData = st.session_state["data"]
 k = result.kpis
 RIGHT = st.column_config.TextColumn(alignment="right", width="small")
 
@@ -18,43 +16,56 @@ earliest = next(
     (p for p in result.products if p.stock_code == k.earliest_runout_code), None
 )
 if earliest is not None and earliest.runout_month:
-    color = theme.FACTOR_COLORS[earliest.limiting_factor]
     order = earliest.order
-    action = (
-        f"Order {month(order.order_month)}, arrives {month(order.arrival_month)} ({'funded' if order.funded else 'not funded'})."
-        if order
-        else "No order possible (capacity)."
-    )
-    truth = ""
-    if gap := earliest.stockout:
-        span = (
-            f"{gap.months} month ({month(gap.start_month)})"
-            if gap.months == 1
-            else f"{gap.months} months ({month(gap.start_month)}–{month(gap.end_month)})"
+    gap = earliest.stockout
+    if gap is not None:
+        span = month(gap.start_month) + (
+            f"–{month(gap.end_month)}" if gap.months > 1 else ""
         )
-        truth = (
-            f'<div class="truth">Out of stock {span}, {number(gap.units)} units, '
-            f"{gbp(gap.lost_sales_gbp)} lost sales. Expedite?</div>"
+        covered = (
+            order is not None
+            and order.funded
+            and order.arrival_month in {r.month for r in earliest.months}
         )
+        status = (
+            f"Out of stock {span}, covered from {month(order.arrival_month)}"
+            if covered and order is not None
+            else f"Out of stock from {month(gap.start_month)}, no funded order arrives in the horizon"
+        )
+        lost = gap.lost_sales_gbp
+    else:
+        status = f"Runs out {month(earliest.runout_month)} if nothing is ordered"
+        lost = earliest.lost_sales_after_plan_gbp
+    if order is None:
+        action = next(
+            (f for f in earliest.flags if f.startswith("Capacity")),
+            "No order possible.",
+        )
+    elif order.funded and gap is not None:
+        action = (
+            f"Order {number(order.qty)} units in {month(order.order_month)}, the earliest possible "
+            f"with a {earliest.lead_months}-month lead time; they arrive {month(order.arrival_month)}."
+        )
+    elif order.funded:
+        action = (
+            f"Order {number(order.qty)} units by {month(order.order_month)}; "
+            f"they arrive {month(order.arrival_month)}, before it runs out."
+        )
+    else:
+        action = f"Order {number(order.qty)} units by {month(order.order_month)}: not funded within the budget."
+    chip = earliest.limiting_factor.capitalize()
     st.markdown(
-        f'<div class="runout-hero" style="border-left-color: {color}">'
+        '<div class="runout-hero">'
         '<div class="eyebrow">Earliest run-out if nothing is ordered</div>'
-        f'<div class="product">{html.escape(earliest.description.title())} ({html.escape(earliest.stock_code)})</div>'
-        f'<div class="facts"><span>Runs out <b>{month(earliest.runout_month)}</b></span>'
-        f'<span class="factor" style="color: {color}">Limiting factor: {earliest.limiting_factor}</span>'
-        f"<span>Lead time <b>{earliest.lead_months} month(s)</b></span></div>"
-        f"{truth}"
-        f'<div class="reason">{html.escape(action)}</div></div>',
+        f'<div class="product">{html.escape(earliest.description.title())} ({html.escape(earliest.stock_code)})'
+        f' <span class="chip factor-chip">{chip}</span></div>'
+        f'<div class="status">{html.escape(status)}</div>'
+        f'<div class="reason">{html.escape(action)}</div>'
+        f'<div class="cost">{gbp(lost)} lost sales</div></div>',
         unsafe_allow_html=True,
     )
 else:
     st.success("No product runs out within the horizon.")
-
-error = backtest(data, result.scenario.method).overall_pct
-st.caption(
-    f"Weighted forecast error (WAPE) last year: {half_up(Fraction(str(error)))}% — this forecast method, "
-    "made in Dec 2010 and checked against what actually sold in Dec 2010–Nov 2011. Details on Methodology."
-)
 
 order_now = [p for p in result.products if p.order_now]
 st.subheader("Order now")
@@ -66,7 +77,7 @@ st.dataframe(
         pd.DataFrame(
             [
                 {
-                    "Product": p.description,
+                    "Product": p.description.title(),
                     "Code": p.stock_code,
                     "Runs out": month(p.runout_month or ""),
                     "Order by": month(p.order.order_month) if p.order else "no order",
@@ -120,7 +131,8 @@ for factor in ["lead time", "budget", "capacity", "stock"]:
             y=counts,
             name=factor,
             marker_color=theme.FACTOR_COLORS[factor],
-            text=[c or "" for c in counts],
+            text=[f"<b>{c}</b>" if c else "" for c in counts],
+            textfont={"color": theme.BG},
             textposition="inside",
             textangle=0,
             insidetextanchor="middle",
@@ -145,7 +157,7 @@ groups = {
     "Lead time": "lost sales",
     "Budget not funded": "short",
     "Capacity blocks order": "lost sales",
-    "Later shortfall not covered": "later shortfall",
+    "Short after plan": "lost sales",
     "Overstocked": "tied up",
     "Inbound arrives after horizon": "",
 }
@@ -158,19 +170,22 @@ for p in result.products:
         built["Lead time"].append(
             (p, f"Out of stock {span}: {number(gap.units)} units", gap.lost_sales_gbp)
         )
-    if p.order and not p.order.funded:
-        built["Budget not funded"].append(
-            (p, f"Order of {number(p.order.qty)} units not funded", p.order.cost_gbp)
-        )
+    for line in p.orders:
+        if not line.funded:
+            built["Budget not funded"].append(
+                (
+                    p,
+                    f"Order {line.order_no}: {number(line.qty)} units by {month(line.order_month)} not funded",
+                    line.cost_gbp,
+                )
+            )
     for flag in p.flags:
         if flag.startswith("Capacity"):
             built["Capacity blocks order"].append(
                 (p, flag, p.lost_sales_after_plan_gbp)
             )
-        elif flag.startswith("Later"):
-            built["Later shortfall not covered"].append(
-                (p, flag, p.later_shortfall_gbp)
-            )
+        elif flag.startswith("Short"):
+            built["Short after plan"].append((p, flag, p.later_shortfall_gbp))
         elif flag.startswith("Overstocked"):
             built["Overstocked"].append((p, flag, p.tied_up_gbp))
         else:

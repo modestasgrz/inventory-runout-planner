@@ -71,7 +71,7 @@ def styled(frame: pd.DataFrame) -> "pd.io.formats.style.Styler":
             lambda v: (
                 f"color: {AMBER}; font-weight: 600"
                 if v == "Not funded"
-                else f"color: {MUTED}"
+                else f"color: {BLUE}"
             ),
             subset=["Status"],
         ).apply(

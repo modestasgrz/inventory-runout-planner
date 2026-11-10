@@ -36,6 +36,19 @@ if earliest is not None and earliest.runout_month:
     else:
         status = f"Runs out {month(earliest.runout_month)} if nothing is ordered"
         lost = earliest.lost_sales_after_plan_gbp
+    later = ""
+    if earliest.later_shortfall_month:
+        later = (
+            f'<div class="later">+ {gbp(earliest.later_shortfall_gbp)} short after plan from '
+            f"{month(earliest.later_shortfall_month)}</div>"
+            if gap is not None
+            else f'<div class="later">Short after plan from {month(earliest.later_shortfall_month)}</div>'
+        )
+    cost = (
+        f'<div class="cost">{gbp(lost)} lost sales</div>'
+        if lost > 0
+        else '<div class="later">No lost sales with the plan</div>'
+    )
     if order is None:
         action = next(
             (f for f in earliest.flags if f.startswith("Capacity")),
@@ -54,14 +67,15 @@ if earliest is not None and earliest.runout_month:
     else:
         action = f"Order {number(order.qty)} units by {month(order.order_month)}: not funded within the budget."
     chip = earliest.limiting_factor.capitalize()
+    chip_color = theme.FACTOR_COLORS[earliest.limiting_factor]
     st.markdown(
         '<div class="runout-hero">'
         '<div class="eyebrow">Earliest run-out if nothing is ordered</div>'
         f'<div class="product">{html.escape(earliest.description.title())} ({html.escape(earliest.stock_code)})'
-        f' <span class="chip factor-chip">{chip}</span></div>'
+        f' <span class="chip factor-chip" style="color: {chip_color}; border-color: {chip_color}">{chip}</span></div>'
         f'<div class="status">{html.escape(status)}</div>'
         f'<div class="reason">{html.escape(action)}</div>'
-        f'<div class="cost">{gbp(lost)} lost sales</div></div>',
+        f"{cost}{later}</div>",
         unsafe_allow_html=True,
     )
 else:
@@ -104,7 +118,7 @@ st.dataframe(
     width="stretch",
     height=35 * len(order_now) + 38,
     column_config={
-        "Product": st.column_config.TextColumn(width="medium"),
+        "Product": st.column_config.TextColumn(width=260),
         "Code": st.column_config.TextColumn(width="small"),
         "Qty": RIGHT,
         "Cost £": RIGHT,
@@ -181,8 +195,11 @@ for p in result.products:
             )
     for flag in p.flags:
         if flag.startswith("Capacity"):
+            counted = (p.stockout.lost_sales_gbp if p.stockout else 0.0) + (
+                p.later_shortfall_gbp
+            )
             built["Capacity blocks order"].append(
-                (p, flag, p.lost_sales_after_plan_gbp)
+                (p, flag, round(max(p.lost_sales_after_plan_gbp - counted, 0.0), 2))
             )
         elif flag.startswith("Short"):
             built["Short after plan"].append((p, flag, p.later_shortfall_gbp))
@@ -206,7 +223,7 @@ for name in sorted(
             pd.DataFrame(
                 [
                     {
-                        "Product": p.description,
+                        "Product": p.description.title(),
                         "Code": p.stock_code,
                         "Flag": text,
                         "£": number(value),
@@ -219,7 +236,7 @@ for name in sorted(
             width="stretch",
             height=35 * len(rows) + 38,
             column_config={
-                "Product": st.column_config.TextColumn(width="medium"),
+                "Product": st.column_config.TextColumn(width=260),
                 "Code": st.column_config.TextColumn(width="small"),
                 "Flag": st.column_config.TextColumn(width="large"),
                 "£": RIGHT,

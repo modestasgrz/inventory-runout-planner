@@ -205,11 +205,11 @@ def hero(at: AppTest) -> dict[str, str]:
         cls: html.unescape(strip_tags(m.group(1)))
         for cls, m in (
             (cls, re.search(rf'class="{cls}">(.*?)</div>', block))
-            for cls in ("product", "status", "reason", "cost")
+            for cls in ("product", "status", "reason", "cost", "later")
         )
         if m
     }
-    parts["chips"] = "|".join(re.findall(r'class="chip[^"]*">([^<]*)<', block))
+    parts["chips"] = "|".join(re.findall(r'class="chip[^"]*"[^>]*>([^<]*)<', block))
     return parts
 
 
@@ -354,7 +354,17 @@ def test_runout_card_matches_core(case: str, real: PlannerData) -> None:
     assert card["chips"] == p.limiting_factor.capitalize(), card
     assert card["status"] == expected_status(p), (case, card)
     lost = p.stockout.lost_sales_gbp if p.stockout else p.lost_sales_after_plan_gbp
-    assert card["cost"] == f"{gbp(lost)} lost sales", (case, card)
+    if lost > 0:
+        assert card["cost"] == f"{gbp(lost)} lost sales", (case, card)
+    else:
+        assert "cost" not in card, (case, card)
+    if p.later_shortfall_month and p.stockout:
+        assert (
+            f"+ {gbp(p.later_shortfall_gbp)} short after plan from {month(p.later_shortfall_month)}"
+            in page
+        ), (case, card)
+    elif p.later_shortfall_month:
+        assert f"Short after plan from {month(p.later_shortfall_month)}" in page
     if p.order is not None and p.order.funded:
         assert number(p.order.qty) in card["reason"]
         assert month(p.order.arrival_month) in card["reason"]
@@ -600,7 +610,11 @@ def test_card_stock_limited(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert card["chips"] == "Stock"
     assert card["status"] == "Runs out Jan 2012 if nothing is ordered"
     assert "200" in card["reason"] and "Jan 2012" in card["reason"]
-    assert card["cost"] == f"{gbp(p.lost_sales_after_plan_gbp)} lost sales"
+    assert (
+        p.lost_sales_after_plan_gbp == p.later_shortfall_gbp
+    )  # every loss is a later shortfall
+    assert "cost" not in card
+    assert card["later"] == "No lost sales with the plan"
     assert "Out of stock" not in main_text(at)
 
 

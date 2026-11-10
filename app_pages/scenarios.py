@@ -13,7 +13,7 @@ from inventory_runout_planner.ui.state import run_scenario
 result: ScenarioResult = st.session_state["result"]
 directory: str = st.session_state["data_dir"]
 LEVERS = {
-    "Baseline": "Today's plan: no growth, suppliers on time, £100 000 budget, 1 month safety stock.",
+    "Baseline": f"Today's plan: no growth, suppliers on time, {gbp(PRESETS['Baseline'].budget_gbp)} budget for the horizon, 1 month safety stock.",
     "Peak season +25%": "Demand 25 % above last year in every month.",
     "Supplier delay +3 weeks": "Every supplier and every open inbound order arrives 3 weeks later.",
     "Tight budget": "Half the purchase budget.",

@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from inventory_runout_planner.fmt import gbp, month, number
 from inventory_runout_planner.models import MonthRow, PlannerData, ScenarioResult
-from inventory_runout_planner.planner import backtest
+from inventory_runout_planner.planner import backtest, month_key
 from inventory_runout_planner.ui import theme
 from inventory_runout_planner.ui.state import product_label
 from plotly.subplots import make_subplots
@@ -34,6 +34,7 @@ st.caption(
 history = data.history[p.stock_code]
 error = backtest(data, result.scenario.method).overall_pct / 100
 forecast_x = [f"{r.month}-01" for r in p.months]
+month_end_x = [f"{month_key(t + 2)}-01" for t in range(len(p.months))]
 figure = make_subplots(
     rows=2,
     cols=1,
@@ -72,7 +73,7 @@ figure.add_scatter(
     col=1,
 )
 figure.add_scatter(
-    x=forecast_x,
+    x=month_end_x,
     y=[r.closing for r in p.months],
     name="Stock, do nothing",
     line={"color": theme.RED, "dash": "dash", "width": 2},
@@ -80,18 +81,18 @@ figure.add_scatter(
     col=1,
 )
 figure.add_scatter(
-    x=forecast_x,
+    x=month_end_x,
     y=[r.closing for r in p.plan_months],
     name="Stock, with the plan",
     line={"color": theme.BLUE, "width": 3},
     row=2,
     col=1,
 )
-for r in p.plan_months:
+for start, end, r in zip(forecast_x, month_end_x, p.plan_months, strict=True):
     if r.unmet:
         figure.add_vrect(
-            x0=f"{r.month}-01",
-            x1=f"{r.month}-28",
+            x0=start,
+            x1=end,
             fillcolor=theme.RED,
             opacity=0.12,
             line_width=0,
@@ -122,12 +123,12 @@ figure.update_yaxes(rangemode="tozero", row=2, col=1)
 figure.update_xaxes(
     dtick="M2",
     tickformat="%b %Y",
-    range=[f"{data.history_months[-6]}-01", f"{p.months[-1].month}-15"],
+    range=[f"{data.history_months[-6]}-01", month_end_x[-1]],
 )
 st.plotly_chart(figure, width="stretch")
 st.caption(
     f"Shaded band = forecast × (1 ± {error:.0%}), the weighted forecast error (WAPE) of this method last year, "
-    "floored at 0. Red months below = unmet demand even with the plan."
+    "floored at 0. Stock is shown at the end of each month; red months below = unmet demand even with the plan."
 )
 
 if p.orders:
@@ -140,7 +141,13 @@ else:
     )
 
 
-def table(rows: list[MonthRow]) -> pd.DataFrame:
+NUMBERS = {
+    column: st.column_config.TextColumn(alignment="right") for column in COLUMNS[1:]
+}
+
+
+def table(rows: list[MonthRow]) -> "pd.io.formats.style.Styler":
+    """Month-by-month rows; zeros greyed so the numbers that matter stand out."""
     return pd.DataFrame(
         [
             [
@@ -155,7 +162,7 @@ def table(rows: list[MonthRow]) -> pd.DataFrame:
             for r in rows
         ],
         columns=COLUMNS,
-    )
+    ).style.map(lambda v: f"color: {theme.MUTED}" if v == "0" else "")
 
 
 st.subheader("Projection if nothing is ordered")
@@ -167,6 +174,7 @@ st.dataframe(
     hide_index=True,
     width="stretch",
     height=35 * len(p.months) + 38,
+    column_config=NUMBERS,
 )
 if p.plan_months != p.months:
     with st.expander("Projection with the plan (every funded order)"):
@@ -175,6 +183,7 @@ if p.plan_months != p.months:
             hide_index=True,
             width="stretch",
             height=35 * len(p.plan_months) + 38,
+            column_config=NUMBERS,
         )
 elif p.orders:
     st.caption(

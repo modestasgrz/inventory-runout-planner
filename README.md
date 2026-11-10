@@ -10,7 +10,7 @@ Demand is real: monthly units for 36 products of a UK online gift and homeware w
 
 | Page | What you get |
 | --- | --- |
-| Overview | KPI cards; the earliest run-out as one decision: how long it is out of stock, what was ordered and when it arrives, the sales lost; the products to order now; run-outs by month; flags grouped by type with their £ |
+| Overview | A three-line summary in plain words (the question, where things stand, what to do first); KPI cards with plain-words help; the earliest run-out as one decision: how long it is out of stock, what was ordered and when it arrives, the sales lost; the products to order now; run-outs by month; flags grouped by type with their £ |
 | Forecast | Per product: recent real demand and the forecast with a range from last year's forecast error, stock at month end with the plan and if nothing is ordered, every order and the month-by-month table behind it |
 | Scenarios | All five presets side by side: products at risk, lost sales and the change against Baseline, unfunded orders and £, earliest run-out, spend against budget |
 | Reorder plan | Every order in the plan, the next one and up to 3 follow-ups per product, by urgency, with its status, budget against spend, the reason behind every line with its numbers, stock value, 4 CSV exports |

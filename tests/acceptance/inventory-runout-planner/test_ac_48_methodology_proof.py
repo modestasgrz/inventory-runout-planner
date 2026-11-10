@@ -12,7 +12,7 @@ def whole(x: float) -> int:
 
 
 def test_ac_48_methodology_proof() -> None:
-    """AC-48: Methodology shows the money formulas, the later-shortfall rule and the backtest table + overall errors."""
+    """AC-48: Methodology shows the money formulas, the later-shortfall rule and the backtest table, the WAPE headline and the plain MAPE average."""
     data = real_data()
     backtest: Any = vars(planner)["backtest"]
     at = app().run()
@@ -26,7 +26,14 @@ def test_ac_48_methodology_proof() -> None:
     assert "Later shortfall not covered" in main
     table = next(d.value for d in at.dataframe if list(d.value.columns) == COLUMNS)
     assert len(table) == 36
-    seasonal = whole(backtest(data, "seasonal_naive").overall_pct)
+    seasonal = backtest(data, "seasonal_naive")
     trailing = whole(backtest(data, "trailing_3m").overall_pct)
-    assert f"Overall error, seasonal naive: {seasonal}%" in main
-    assert f"Overall error, trailing 3-month: {trailing}%" in main
+    assert "WAPE = Σ |actual − forecast| ÷ Σ actual" in main
+    assert (
+        f"Weighted forecast error (WAPE), seasonal naive: {whole(seasonal.overall_pct)}%"
+        in main
+    )
+    assert f"Weighted forecast error (WAPE), trailing 3-month: {trailing}%" in main
+    mapes = [r.mape_pct for r in seasonal.rows if r.mape_pct is not None]
+    plain = whole(sum(mapes) / len(mapes))
+    assert f"Plain average of per-product MAPE, seasonal naive: {plain}%" in main

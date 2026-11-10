@@ -4,7 +4,7 @@ from inventory_runout_planner.presets import BASELINE
 from runout_toy import app, kpis, real_data, texts
 
 COLUMNS = [
-    "Rank",
+    "Urgency rank",
     "Product",
     "Code",
     "Order month",
@@ -19,14 +19,14 @@ FILES = ["products.csv", "monthly_projection.csv", "scenario.csv", "reorder_plan
 
 def test_ac_29_reorder_page() -> None:
     """AC-29: Reorder plan lists every order sorted by order month then rank, with the DEC-15 columns (no Reason),
-    every reason on the page, 4 labelled downloads, and 'Funded total: £X' matching the Purchase spend KPI."""
+    every reason on the page, 4 labelled downloads, 'Funded total: £X' matching the Purchase spend KPI, and the stock value."""
     result = run(real_data(), BASELINE)
     at = app().run()
     at.switch_page("app_pages/reorder_plan.py").run()
     assert not at.exception
     plan = next(d.value for d in at.dataframe if list(d.value.columns) == COLUMNS)
     ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
-    assert list(plan["Rank"]) == [line.rank for line in ordered]
+    assert list(plan["Urgency rank"]) == [line.rank for line in ordered]
     assert list(plan["Code"].astype(str)) == [line.stock_code for line in ordered]
     main = texts(at.main)
     for line in result.plan:
@@ -36,3 +36,4 @@ def test_ac_29_reorder_page() -> None:
     funded = gbp(result.kpis.funded_spend_gbp)
     assert f"Funded total: {funded}" in main
     assert kpis(at)["Purchase spend"].startswith(funded)
+    assert f"Stock value: {gbp(result.kpis.stock_value_gbp)}" in main

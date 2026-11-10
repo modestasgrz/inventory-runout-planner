@@ -1,4 +1,4 @@
-from inventory_runout_planner.fmt import gbp, month, number
+from inventory_runout_planner.fmt import gbp, number
 from inventory_runout_planner.models import ScenarioResult
 from inventory_runout_planner.planner import run
 from inventory_runout_planner.presets import BASELINE, PRESETS
@@ -6,19 +6,13 @@ from runout_toy import app, kpis, real_data
 
 
 def expected(result: ScenarioResult) -> dict[str, str]:
-    k = result.kpis
-    names = {p.stock_code: p.description for p in result.products}
-    earliest = (
-        f"{month(k.earliest_runout_month)} · {names[k.earliest_runout_code]} ({k.earliest_runout_code})"
-        if k.earliest_runout_code and k.earliest_runout_month
-        else "None in horizon"
-    )
+    """The Overview KPI values (DEC-14, Change 3: no Earliest run-out card on Overview)."""
+    k = result.kpis.model_dump()
     return {
-        "Products at risk": number(k.products_at_risk),
-        "Earliest run-out": earliest,
-        "Purchase spend": f"{gbp(k.funded_spend_gbp)} of {gbp(k.budget_gbp)}",
-        "Unfunded orders": number(k.unfunded_orders),
-        "Stock value": gbp(k.stock_value_gbp),
+        "Products at risk": number(k["products_at_risk"]),
+        "Purchase spend": gbp(k["funded_spend_gbp"]),
+        "Unfunded orders": number(k["unfunded_orders"]),
+        "Lost sales after plan": gbp(k["lost_sales_after_plan_gbp"]),
     }
 
 

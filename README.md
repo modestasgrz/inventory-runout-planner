@@ -10,30 +10,31 @@ Demand is real: monthly units for 36 products of a UK online gift and homeware w
 
 | Page | What you get |
 | --- | --- |
-| Overview | KPI cards, the earliest run-out with its limiting factor and, when an order can't arrive in time, how long it is out of stock and the sales lost; last year's forecast error; the products to order now; run-outs by month; flags grouped by type with their £ |
-| Forecast | Per product: recent real demand, the forecast, projected stock with and without the next order, and the month-by-month table behind it |
-| Scenarios | The current assumptions and all five presets side by side: products at risk, unfunded orders and £, lost sales, stock-out months, earliest run-out, spend against budget |
-| Reorder plan | The next order per product by order month, with its urgency rank, budget against spend, the reason behind every line with its numbers, stock value, 4 CSV exports |
+| Overview | KPI cards; the earliest run-out as one decision: how long it is out of stock, what was ordered and when it arrives, the sales lost; the products to order now; run-outs by month; flags grouped by type with their £ |
+| Forecast | Per product: recent real demand and the forecast with a range from last year's forecast error, stock at month end with the plan and if nothing is ordered, every order and the month-by-month table behind it |
+| Scenarios | All five presets side by side: products at risk, lost sales and the change against Baseline, unfunded orders and £, earliest run-out, spend against budget |
+| Reorder plan | Every order in the plan, the next one and up to 3 follow-ups per product, by urgency, with its status, budget against spend, the reason behind every line with its numbers, stock value, 4 CSV exports |
 | Methodology | Every formula, the data cleaning, the synthetic-data rules, the forecast backtest and the hand-calculated test cases |
 
-The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier delay, purchase budget, safety stock and forecast method. Presets: **Baseline**, **Peak season +25%**, **Supplier delay +3 weeks**, **Tight budget**, **Efficiency**. Editing any input switches the preset to **Custom**; picking a preset reloads its values. **Reset to Baseline** puts everything back. Every page recalculates from the same scenario, so a KPI shows the same value everywhere. Invalid inputs (e.g. a negative budget) show a clear message instead of numbers.
+The sidebar holds the scenario: horizon (6–12 months), demand growth, supplier delay, purchase budget for the whole horizon, safety stock and forecast method. Presets: **Baseline**, **Peak season +25%**, **Supplier delay +3 weeks**, **Tight budget**, **Efficiency**. Editing any input switches the preset to **Custom**; picking a preset reloads its values. **Reset to Baseline** puts everything back. Every page recalculates from the same scenario, so a KPI shows the same value everywhere. Invalid inputs (e.g. a negative budget) show a clear message instead of numbers.
 
-## Results on the real demand data (Baseline: £100 000 budget, 12 months, 1 month safety stock)
+## Results on the real demand data (Baseline: £350 000 budget for 12 months, 1 month safety stock)
 
-| | Baseline | Peak season +25% | Supplier delay +3 weeks | Tight budget (£50 000) | Efficiency (½ month safety) |
+| | Baseline | Peak season +25% | Supplier delay +3 weeks | Tight budget (£175 000) | Efficiency (½ month safety) |
 | --- | --- | --- | --- | --- | --- |
-| Products at risk (still losing sales after the plan) | 7 | 20 | 14 | 26 | 4 |
-| Lost sales after plan / if nothing ordered | £69 298 / £560 063 | £251 140 / £767 286 | £103 393 / £560 063 | £337 325 / £560 063 | £32 160 / £560 063 |
-| Funded / suggested spend | £99 993 / £124 083 | £99 984 / £162 296 | £99 772 / £127 909 | £49 834 / £124 083 | £94 251 / £111 367 |
-| Unfunded orders | 5 (£24 091) | 14 (£62 312) | 8 (£28 137) | 24 (£74 249) | 1 (£17 116) |
-| Stock-out months (product-months short after the plan) | 24 | 99 | 46 | 162 | 7 |
+| Lost sales with the plan (12 months) | £29 145 | £193 215 | £36 912 | £269 499 | £31 545 |
+| vs Baseline | — | +£164 069 | +£7 767 | +£240 354 | +£2 400 |
+| Lost sales if nothing is ordered | £560 063 | £767 286 | £560 063 | £560 063 | £560 063 |
+| Products at risk (still short in some month with the plan) | 10 | 30 | 13 | 32 | 18 |
+| Funded / suggested spend | £349 968 / £424 587 | £349 902 / £544 581 | £349 968 / £419 600 | £174 779 / £424 587 | £349 969 / £401 082 |
+| Orders in the plan / unfunded | 118 / 24 (£74 620) | 129 / 45 (£194 679) | 117 / 23 (£69 632) | 118 / 65 (£249 808) | 114 / 20 (£51 113) |
 | Earliest run-out | Dec 2011 · 84347, lead time | Dec 2011 · 85099B, lead time | Dec 2011 · 84347, lead time | Dec 2011 · 84347, lead time | Dec 2011 · 84347, lead time |
 
-Lost sales are unmet units × the product's real median selling price. "After plan" counts the months up to the end of each funded order's 3-month cover. Shortfalls after that need a further order, which this plan doesn't make; they are flagged separately (£323 895 on Baseline) and not counted.
+Lost sales are unmet units × the product's real median selling price, over the whole horizon, with every funded order. Each product gets its next order plus up to 3 follow-ups (about one a quarter), each placed one lead time before stock dips again. All orders compete for the same budget by urgency, and a follow-up is funded only if the order before it is. Cutting safety stock (Efficiency) frees budget for more orders but still loses more sales than Baseline.
 
-ROTATING SILVER ANGELS T-LIGHT HLDR (84347) runs out in Dec 2011 and its supplier needs 10 weeks: even an order placed today arrives in March, so it is out of stock for 3 months, 1 006 units, about £2 565 of sales. A +3-week supplier delay pushes the open purchase order for JUMBO BAG RED RETROSPOT (85099B) from January into February, so it runs out in January instead of after April.
+ROTATING SILVER ANGELS T-LIGHT HLDR (84347) runs out in Dec 2011 and its supplier needs 10 weeks: even an order placed today arrives in March, so it is out of stock Dec 2011–Feb 2012, about £2 565 of sales. Its follow-up arriving in August covers the autumn peak until November, when 2 948 units (about £7 517) are still short because the next follow-up doesn't fit the budget. A +3-week supplier delay pushes the open purchase order for JUMBO BAG RED RETROSPOT (85099B) from January into February, so it runs out in January instead of after April.
 
-**How good is the forecast?** Forecasting Dec 2010–Nov 2011 from the year before and checking it against what actually sold gives a weighted error (WAPE = Σ |actual − forecast| ÷ Σ actual) of 61 % for the seasonal method and 93 % for the 3-month average. The plain average of per-product percentage errors is 171 %. It is inflated by months with almost no sales, where a normal forecast scores hundreds of percent.
+**How good is the forecast?** Forecasting Dec 2010–Nov 2011 from the year before and checking it against what actually sold gives a weighted error (WAPE = Σ |actual − forecast| ÷ Σ actual) of 61 % for the seasonal method and 93 % for the 3-month average. The Forecast page draws that as a range around each forecast. The plain average of per-product percentage errors is 171 %. It is inflated by months with almost no sales, where a normal forecast scores hundreds of percent.
 
 ![Reorder plan](docs/screenshots/1440-reorder-plan.png)
 
@@ -42,8 +43,8 @@ ROTATING SILVER ANGELS T-LIGHT HLDR (84347) runs out in Dec 2011 and its supplie
 - **Forecast:** same calendar month last year × (1 + growth %), or the mean of the last 3 months × (1 + growth %). Rounded half up to whole units.
 - **Projection:** available = opening + inbound; shipped = min(demand, available); unmet = demand − shipped; closing = available − shipped. Stock never goes negative; a shortfall is unmet demand. Run-out = first month with unmet demand.
 - **Lead time:** `ceil((lead time weeks + delay weeks) × 7 / 30.44)` months.
-- **Next order:** triggered by the first month below safety stock; ordered early enough to arrive by then; quantity = 3 months of forecast + safety stock − stock available at arrival, at least the MOQ, at most the free warehouse capacity.
-- **Ranking and budget:** urgency = run-out month, then value at risk (unmet units × unit cost). Funded in urgency order while each order fits the budget left.
+- **Orders:** the next order is triggered by the first month below safety stock and placed early enough to arrive by then; quantity = 3 months of forecast + safety stock − stock available at arrival, at least the MOQ, at most the free warehouse capacity. Up to 3 follow-ups per product are planned the same way on the projection that includes the earlier orders.
+- **Ranking and budget:** urgency = the month an order prevents a shortfall, then value at risk (unmet units × unit cost). Funded in urgency order while each order fits the budget left; a follow-up only if the order before it is funded.
 - **Money:** lost sales = unmet units × median selling price; £ tied up = (stock on hand − 6 months of average forecast) × unit cost for overstocked products.
 - **Limiting factor:** *lead time* (an order now arrives too late), *capacity*, *budget*, *stock* (ordering now fixes it) or *none*.
 
@@ -51,9 +52,9 @@ Full detail on the Methodology page and in [`specs/inventory-runout-planner.md`]
 
 ## Tests
 
-- 48 acceptance tests, one per acceptance criterion in the spec. They include hand-calculated cases, e.g. 100 units in stock, 60 a month, lead time 4 weeks → runs out Jan 2012, order 200 units = 180 + 60 − 40, £400.00, and a 10-week lead time → out of stock Jan–Feb 2012, 80 units, £400 lost sales.
-- 511 unit tests on the calculation core. They cover property tests over random products and scenarios (stock is conserved and never negative, spend ≤ budget, ranking order, lost sales and later shortfalls add up), every input boundary, data-file error paths, the backtest and exact half-up rounding.
-- 296 more Streamlit `AppTest` checks on top of the acceptance tests. Every page renders under every preset and edge input, and the KPI cards match the core across all pages. Flag groups add up to the KPIs. Presets move the KPIs and Reset restores them. Bad input and missing data files show a clear message.
+- 51 acceptance tests, one per acceptance criterion in the spec. They include hand-calculated cases, e.g. 100 units in stock, 60 a month, lead time 4 weeks → runs out Jan 2012, order 200 units = 180 + 60 − 40, £400.00, then a follow-up of 180 units arriving Apr 2012 so nothing is lost.
+- 781 unit tests on the calculation core. They cover property tests over random products and scenarios (stock is conserved and never negative, spend ≤ budget, ranking order, a funded follow-up always has its earlier order funded, lost sales add up), an independent re-implementation of the follow-up rules, every input boundary, data-file error paths, the backtest and exact half-up rounding.
+- 319 more Streamlit `AppTest` checks on top of the acceptance tests. Every page renders under every preset and edge input, and the KPI cards match the core across all pages. Flag groups add up to the KPIs. The run-out card, reorder table and scenario comparison match the core. Presets move the KPIs and Reset restores them. Bad input and missing data files show a clear message.
 
 ## Run it yourself
 

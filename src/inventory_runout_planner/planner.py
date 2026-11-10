@@ -23,6 +23,7 @@ DAYS_PER_MONTH = 30.44
 FIRST_MONTH = 2011 * 12 + 11  # Dec 2011 as a month count
 OVERSTOCK_MONTHS = 6.0
 COVER_MONTHS = 3
+MAX_ORDERS = 4
 
 
 class Draft(BaseModel):
@@ -35,7 +36,7 @@ class Draft(BaseModel):
     lead: int
     inbound_t: int | None
     arrival: int | None
-    line: ReorderLine | None
+    lines: list[tuple[ReorderLine, int, int]]
     flags: list[str]
     value_at_risk: float
     cover: float
@@ -90,7 +91,10 @@ def project(stock: int, demand: list[int], arrivals: dict[int, int]) -> list[Mon
     return rows
 
 
-def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
+def run(
+    data: PlannerData, scenario: Scenario, max_orders: int = MAX_ORDERS
+) -> ScenarioResult:
+    """DEC-09 + DEC-21: up to max_orders orders per product, ranked and funded together."""
     horizon = scenario.horizon_months
     drafts = []
     for p in data.products:
@@ -109,14 +113,6 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
         rows = extended[:horizon]
         safety = [half_up(Fraction(str(scenario.safety_months)) * d) for d in demand]
         runout = next((t for t, r in enumerate(rows, start=1) if r.unmet > 0), None)
-        trigger = next(
-            (
-                t
-                for t, r in enumerate(rows, start=1)
-                if r.closing < safety[t - 1] or r.unmet > 0
-            ),
-            None,
-        )
         flags = []
         if inbound_t and inbound_t > horizon:
             flags.append("Inbound arrives after horizon")
@@ -132,48 +128,82 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 if math.isfinite(cover)
                 else "Overstocked: no forecast demand"
             )
-        line = None
+        lines: list[tuple[ReorderLine, int, int]] = []
         arrival = None
-        if trigger:
-            order_t = max(1, trigger - lead)
-            arrival = order_t + lead
-            at_arrival = extended[arrival - 1]
+        planned = dict(arrivals)
+        previous = 0
+        for k in range(1, max_orders + 1):
+            projection = project(p.stock_on_hand, demand, planned)
+            due = next(
+                (
+                    t
+                    for t, r in enumerate(projection[:horizon], start=1)
+                    if t > previous and (r.closing < safety[t - 1] or r.unmet > 0)
+                ),
+                None,
+            )
+            if due is None:
+                break
+            short = next(
+                (
+                    t
+                    for t, r in enumerate(projection[:horizon], start=1)
+                    if t > previous and r.unmet > 0
+                ),
+                None,
+            )
+            order_t = max(1, due - lead)
+            arrives = order_t + lead
+            if arrives <= previous:
+                break
+            if k == 1:
+                arrival = arrives
+            at_arrival = projection[arrives - 1]
             available = at_arrival.opening + at_arrival.inbound
-            cover_demand = sum(demand[arrival - 1 : arrival - 1 + COVER_MONTHS])
+            cover_demand = sum(demand[arrives - 1 : arrives - 1 + COVER_MONTHS])
             room = p.capacity - available
             if room < p.moq:
                 flags.append(
                     f"Capacity blocks order: room {number(room)} < MOQ {number(p.moq)}"
                 )
-            else:
-                qty = min(
-                    max(p.moq, cover_demand + safety[arrival - 1] - available), room
-                )
-                cost = round(qty * p.unit_cost, 2)
+                break
+            qty = min(max(p.moq, cover_demand + safety[arrives - 1] - available), room)
+            cost = round(qty * p.unit_cost, 2)
+            if k == 1:
                 opening_sentence = (
                     f"Runs out {month(month_key(runout))} without an order."
                     if runout
-                    else f"Falls below safety stock in {month(month_key(trigger))}."
+                    else f"Falls below safety stock in {month(month_key(due))}."
                 )
-                line = ReorderLine(
-                    rank=0,
-                    stock_code=p.stock_code,
-                    description=p.description,
-                    order_month=month_key(order_t),
-                    arrival_month=month_key(arrival),
-                    qty=qty,
-                    unit_cost=p.unit_cost,
-                    cost_gbp=cost,
-                    funded=False,
-                    limiting_factor="",
-                    reason=(
-                        f"{opening_sentence} Lead time {p.lead_time_weeks} weeks + delay {scenario.delay_weeks} weeks"
-                        f" = {lead} month(s): order {month(month_key(order_t))}, arrives {month(month_key(arrival))}."
-                        f" Order {units(qty)} = 3 months demand {number(cover_demand)} + safety {number(safety[arrival - 1])}"
-                        f" − available {number(available)} (MOQ {number(p.moq)}, room {number(room)})."
-                        f" Cost {gbp(cost, pence=True)}."
-                    ),
+            else:
+                opening_sentence = (
+                    f"Follow-up order {k}: runs out {month(month_key(short))} after the earlier order(s)."
+                    if short
+                    else f"Follow-up order {k}: falls below safety stock in {month(month_key(due))}."
                 )
+            line = ReorderLine(
+                rank=0,
+                stock_code=p.stock_code,
+                description=p.description,
+                order_month=month_key(order_t),
+                arrival_month=month_key(arrives),
+                qty=qty,
+                unit_cost=p.unit_cost,
+                cost_gbp=cost,
+                funded=False,
+                limiting_factor="",
+                reason=(
+                    f"{opening_sentence} Lead time {p.lead_time_weeks} weeks + delay {scenario.delay_weeks} weeks"
+                    f" = {lead} month(s): order {month(month_key(order_t))}, arrives {month(month_key(arrives))}."
+                    f" Order {units(qty)} = 3 months demand {number(cover_demand)} + safety {number(safety[arrives - 1])}"
+                    f" − available {number(available)} (MOQ {number(p.moq)}, room {number(room)})."
+                    f" Cost {gbp(cost, pence=True)}."
+                ),
+                order_no=k,
+            )
+            lines.append((line, arrives, short or horizon + 1))
+            planned[arrives] = planned.get(arrives, 0) + qty
+            previous = arrives
         drafts.append(
             Draft(
                 product=p,
@@ -183,7 +213,7 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 lead=lead,
                 inbound_t=inbound_t,
                 arrival=arrival,
-                line=line,
+                lines=lines,
                 flags=flags,
                 value_at_risk=round(sum(r.unmet for r in rows) * p.unit_cost, 2),
                 cover=cover,
@@ -193,82 +223,90 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
     drafts.sort(
         key=lambda d: (d.runout or horizon + 1, -d.value_at_risk, d.product.stock_code)
     )
+    entries = sorted(
+        (
+            (short, -d.value_at_risk, d.product.stock_code, line.order_no, line)
+            for d in drafts
+            for line, _, short in d.lines
+        ),
+        key=lambda e: e[:4],
+    )
     remaining = scenario.budget_gbp
-    ranked_lines: dict[str, ReorderLine] = {}
+    funded_orders: set[tuple[str, int]] = set()
     plan: list[ReorderLine] = []
-    for d in drafts:
-        if d.line is None:
-            continue
-        funded = d.line.cost_gbp <= remaining + 1e-9
-        suffix = (
-            ""
-            if funded
-            else f" Not funded: {gbp(remaining, pence=True)} left of budget."
+    for *_, line in entries:
+        earlier = (
+            line.order_no == 1 or (line.stock_code, line.order_no - 1) in funded_orders
         )
+        funded = earlier and line.cost_gbp <= remaining + 1e-9
         if funded:
-            remaining = round(remaining - d.line.cost_gbp, 2)
-        ranked = d.line.model_copy(
-            update={
-                "rank": len(plan) + 1,
-                "funded": funded,
-                "reason": d.line.reason + suffix,
-            }
+            remaining = round(remaining - line.cost_gbp, 2)
+            funded_orders.add((line.stock_code, line.order_no))
+            suffix = ""
+        elif not earlier:
+            suffix = " Not funded: earlier order not funded."
+        else:
+            suffix = f" Not funded: {gbp(remaining, pence=True)} left of budget."
+        plan.append(
+            line.model_copy(
+                update={
+                    "rank": len(plan) + 1,
+                    "funded": funded,
+                    "reason": line.reason + suffix,
+                }
+            )
         )
-        plan.append(ranked)
-        ranked_lines[d.product.stock_code] = ranked
+    ranked = {(line.stock_code, line.order_no): line for line in plan}
 
     products = []
     for d in drafts:
         p, rows, runout, arrival = d.product, d.rows, d.runout, d.arrival
-        ranked_line = ranked_lines.get(p.stock_code)
+        first = ranked.get((p.stock_code, 1))
         factor: LimitingFactor
         if runout is None:
             factor = "none"
         elif arrival is not None and arrival > runout:
             factor = "lead time"
-        elif ranked_line is None:
+        elif first is None:
             factor = "capacity"
-        elif not ranked_line.funded:
+        elif not first.funded:
             factor = "budget"
         else:
             factor = "stock"
-        if ranked_line is not None:
-            ranked_line = ranked_line.model_copy(update={"limiting_factor": factor})
-            plan[ranked_line.rank - 1] = ranked_line
-        plan_rows = rows
-        if (
-            ranked_line is not None
-            and ranked_line.funded
-            and arrival is not None
-            and arrival <= horizon
-        ):
-            plan_arrivals = dict(d.arrivals)
-            plan_arrivals[arrival] = plan_arrivals.get(arrival, 0) + ranked_line.qty
-            plan_rows = project(
-                p.stock_on_hand, [r.demand for r in rows], plan_arrivals
+        orders = []
+        plan_arrivals = dict(d.arrivals)
+        for line, arrives, short in d.lines:
+            order_factor: LimitingFactor
+            if line.order_no == 1:
+                order_factor = factor
+            elif short <= horizon and arrives > short:
+                order_factor = "lead time"
+            elif not ranked[(p.stock_code, line.order_no)].funded:
+                order_factor = "budget"
+            elif short > horizon:
+                order_factor = "none"
+            else:
+                order_factor = "stock"
+            final = ranked[(p.stock_code, line.order_no)].model_copy(
+                update={"limiting_factor": order_factor}
             )
+            plan[final.rank - 1] = final
+            orders.append(final)
+            if final.funded and arrives <= horizon:
+                plan_arrivals[arrives] = plan_arrivals.get(arrives, 0) + final.qty
+        plan_rows = project(p.stock_on_hand, [r.demand for r in rows], plan_arrivals)
+        first = orders[0] if orders else None
         sell_price = data.prices[p.stock_code]
-        cover_end = (
-            min(horizon, arrival + COVER_MONTHS - 1)
-            if ranked_line is not None
-            and ranked_line.funded
-            and arrival is not None
-            and arrival <= horizon
-            else horizon
-        )
-        window, later = plan_rows[:cover_end], plan_rows[cover_end:]
-        later_units = sum(r.unmet for r in later)
-        later_month = next((r.month for r in later if r.unmet), None)
         flags = list(d.flags)
-        if later_month:
-            flags.append(
-                f"Later shortfall not covered: {units(later_units)} from {month(later_month)}"
-            )
         stockout = None
+        gap_months: set[str] = set()
         if factor == "lead time" and runout is not None and arrival is not None:
-            arrives = ranked_line is not None and ranked_line.funded
-            gap = rows[runout - 1 : min(arrival - 1, horizon) if arrives else horizon]
+            arrives_first = first is not None and first.funded
+            gap = rows[
+                runout - 1 : min(arrival - 1, horizon) if arrives_first else horizon
+            ]
             gap_units = sum(r.unmet for r in gap)
+            gap_months = {r.month for r in gap}
             stockout = Stockout(
                 start_month=gap[0].month,
                 end_month=gap[-1].month,
@@ -276,13 +314,24 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 units=gap_units,
                 lost_sales_gbp=round(gap_units * sell_price, 2),
             )
+        later = (
+            [r for r in plan_rows if r.month not in gap_months]
+            if first is not None and first.funded
+            else []
+        )
+        later_units = sum(r.unmet for r in later)
+        later_month = next((r.month for r in later if r.unmet), None)
+        if later_month:
+            flags.append(
+                f"Short after plan: {units(later_units)} from {month(later_month)}"
+            )
         tied_up = 0.0
         if any(f.startswith("Overstocked") for f in d.flags):
             normal = half_up(
                 Fraction(int(OVERSTOCK_MONTHS) * sum(r.demand for r in rows), horizon)
             )
             tied_up = round(max(p.stock_on_hand - normal, 0) * p.unit_cost, 2)
-        stockout_months = sum(r.unmet > 0 for r in window)
+        stockout_months = sum(r.unmet > 0 for r in plan_rows)
         products.append(
             ProductResult(
                 stock_code=p.stock_code,
@@ -293,7 +342,8 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 runout_month=month_key(runout) if runout else None,
                 lead_months=d.lead,
                 inbound_month=month_key(d.inbound_t) if d.inbound_t else None,
-                order=ranked_line,
+                order=first,
+                orders=orders,
                 limiting_factor=factor,
                 flags=flags,
                 value_at_risk_gbp=d.value_at_risk,
@@ -302,7 +352,7 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 sell_price=sell_price,
                 lost_sales_gbp=round(sum(r.unmet for r in rows) * sell_price, 2),
                 lost_sales_after_plan_gbp=round(
-                    sum(r.unmet for r in window) * sell_price, 2
+                    sum(r.unmet for r in plan_rows) * sell_price, 2
                 ),
                 later_shortfall_units=later_units,
                 later_shortfall_month=later_month,

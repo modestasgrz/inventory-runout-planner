@@ -9,7 +9,12 @@ LimitingFactor = Literal["stock", "lead time", "budget", "capacity", "none"]
 INPUT_RULES = [
     ("growth_pct", "Demand growth (%) must be between -50 and 100", -50, 100),
     ("delay_weeks", "Supplier delay (weeks) must be between 0 and 26", 0, 26),
-    ("budget_gbp", "Budget (£) must be between 0 and 1 000 000", 0, 1_000_000),
+    (
+        "budget_gbp",
+        "Purchase budget (£, whole horizon) must be between 0 and 1 000 000",
+        0,
+        1_000_000,
+    ),
     ("safety_months", "Safety stock (months) must be between 0 and 6", 0, 6),
 ]
 
@@ -65,6 +70,7 @@ class ReorderLine(BaseModel):
     funded: bool
     limiting_factor: str
     reason: str
+    order_no: int
 
 
 class Stockout(BaseModel):
@@ -85,6 +91,7 @@ class ProductResult(BaseModel):
     lead_months: int
     inbound_month: str | None
     order: ReorderLine | None
+    orders: list[ReorderLine]
     limiting_factor: LimitingFactor
     flags: list[str]
     value_at_risk_gbp: float

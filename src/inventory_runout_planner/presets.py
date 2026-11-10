@@ -1,6 +1,6 @@
 from inventory_runout_planner.models import Scenario
 
-BASELINE_BUDGET_GBP = 100_000
+BASELINE_BUDGET_GBP = 350_000
 
 BASELINE = Scenario(
     horizon_months=12,

@@ -3,8 +3,11 @@ from fractions import Fraction
 
 from inventory_runout_planner.fmt import gbp, month, number, units
 from inventory_runout_planner.models import (
+    Backtest,
+    BacktestRow,
     Kpis,
     LimitingFactor,
+    Method,
     MonthRow,
     PlannerData,
     Product,
@@ -12,6 +15,7 @@ from inventory_runout_planner.models import (
     ReorderLine,
     Scenario,
     ScenarioResult,
+    Stockout,
 )
 from pydantic import BaseModel
 
@@ -243,6 +247,41 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
             plan_rows = project(
                 p.stock_on_hand, [r.demand for r in rows], plan_arrivals
             )
+        sell_price = data.prices[p.stock_code]
+        cover_end = (
+            min(horizon, arrival + COVER_MONTHS - 1)
+            if ranked_line is not None
+            and ranked_line.funded
+            and arrival is not None
+            and arrival <= horizon
+            else horizon
+        )
+        window, later = plan_rows[:cover_end], plan_rows[cover_end:]
+        later_units = sum(r.unmet for r in later)
+        later_month = next((r.month for r in later if r.unmet), None)
+        flags = list(d.flags)
+        if later_month:
+            flags.append(
+                f"Later shortfall not covered: {units(later_units)} from {month(later_month)}"
+            )
+        stockout = None
+        if factor == "lead time" and runout is not None and arrival is not None:
+            gap = rows[runout - 1 : min(arrival - 1, horizon)]
+            gap_units = sum(r.unmet for r in gap)
+            stockout = Stockout(
+                start_month=gap[0].month,
+                end_month=gap[-1].month,
+                months=len(gap),
+                units=gap_units,
+                lost_sales_gbp=round(gap_units * sell_price, 2),
+            )
+        tied_up = 0.0
+        if any(f.startswith("Overstocked") for f in d.flags):
+            normal = half_up(
+                Fraction(int(OVERSTOCK_MONTHS) * sum(r.demand for r in rows), horizon)
+            )
+            tied_up = round(max(p.stock_on_hand - normal, 0) * p.unit_cost, 2)
+        stockout_months = sum(r.unmet > 0 for r in window)
         products.append(
             ProductResult(
                 stock_code=p.stock_code,
@@ -255,17 +294,29 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
                 inbound_month=month_key(d.inbound_t) if d.inbound_t else None,
                 order=ranked_line,
                 limiting_factor=factor,
-                flags=d.flags,
+                flags=flags,
                 value_at_risk_gbp=d.value_at_risk,
                 cover_months=d.cover,
                 order_now=runout is not None and runout <= d.lead + 1,
+                sell_price=sell_price,
+                lost_sales_gbp=round(sum(r.unmet for r in rows) * sell_price, 2),
+                lost_sales_after_plan_gbp=round(
+                    sum(r.unmet for r in window) * sell_price, 2
+                ),
+                later_shortfall_units=later_units,
+                later_shortfall_month=later_month,
+                later_shortfall_gbp=round(later_units * sell_price, 2),
+                stockout=stockout,
+                stockout_months=stockout_months,
+                at_risk_after_plan=stockout_months > 0,
+                tied_up_gbp=tied_up,
             )
         )
 
     with_runout = [r for r in products if r.runout_month]
     earliest = with_runout[0] if with_runout else None
     kpis = Kpis(
-        products_at_risk=sum(r.order_now for r in products),
+        products_at_risk=sum(r.at_risk_after_plan for r in products),
         earliest_runout_code=earliest.stock_code if earliest else None,
         earliest_runout_month=earliest.runout_month if earliest else None,
         earliest_limiting_factor=earliest.limiting_factor if earliest else None,
@@ -276,5 +327,40 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
         stock_value_gbp=round(
             sum(p.stock_on_hand * p.unit_cost for p in data.products), 2
         ),
+        unfunded_gbp=round(sum(line.cost_gbp for line in plan if not line.funded), 2),
+        lost_sales_gbp=round(sum(r.lost_sales_gbp for r in products), 2),
+        lost_sales_after_plan_gbp=round(
+            sum(r.lost_sales_after_plan_gbp for r in products), 2
+        ),
+        later_shortfall_gbp=round(sum(r.later_shortfall_gbp for r in products), 2),
+        tied_up_gbp=round(sum(r.tied_up_gbp for r in products), 2),
+        stockout_months=sum(r.stockout_months for r in products),
     )
     return ScenarioResult(scenario=scenario, products=products, plan=plan, kpis=kpis)
+
+
+def backtest(data: PlannerData, method: Method) -> Backtest:
+    """DEC-19: forecast Dec 2010–Nov 2011 from the first 12 history months (growth 0) against the actual units."""
+    rows = []
+    for p in data.products:
+        history = data.history[p.stock_code]
+        predicted = forecast(history[:12], method, 0, 12)
+        actual = history[12:]
+        errors = [abs(a - f) for a, f in zip(actual, predicted, strict=True)]
+        ratios = [Fraction(e, a) for e, a in zip(errors, actual, strict=True) if a]
+        rows.append(
+            BacktestRow(
+                stock_code=p.stock_code,
+                description=p.description,
+                mape_pct=float(sum(ratios) / len(ratios) * 100) if ratios else None,
+                abs_error_units=sum(errors),
+                actual_units=sum(actual),
+            )
+        )
+    total = sum(r.actual_units for r in rows)
+    overall = (
+        Fraction(sum(r.abs_error_units for r in rows) * 100, total) if total else 0
+    )
+    return Backtest(
+        method=method, as_of="2010-12", rows=rows, overall_pct=round(float(overall), 2)
+    )

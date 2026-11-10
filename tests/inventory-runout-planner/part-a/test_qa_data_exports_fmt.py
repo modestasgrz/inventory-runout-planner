@@ -170,6 +170,10 @@ def pad(code: str = "PAD") -> str:
 def write_data(tmp: Path, demand: str, products: str) -> Path:
     (tmp / "demand_monthly.csv").write_text(demand)
     (tmp / "products_synthetic.csv").write_text(products)
+    codes = [line.split(",")[0] for line in products.splitlines()[1:] if line]
+    (tmp / "median_prices.csv").write_text(
+        "stock_code,median_price\n" + "".join(f"{c},1.0\n" for c in codes)
+    )
     return tmp
 
 
@@ -433,7 +437,7 @@ def test_exports_shape_for_every_preset(real: PlannerData, preset: str) -> None:
         *Scenario.model_fields,
         *Kpis.model_fields,
     ]
-    assert len(scen) == 1 + 6 + 9
+    assert len(scen) == 1 + 6 + len(Kpis.model_fields)
     assert scen.set_index("key").loc["as_of", "value"] == "2011-12-01"
     plan = out["reorder_plan.csv"]
     assert list(plan.columns) == list(ReorderLine.model_fields)
@@ -475,13 +479,14 @@ def test_exports_with_empty_plan_keep_columns() -> None:
         products=[p],
         history={"X": [10] * 24},
         history_months=[f"m{i}" for i in range(24)],
+        prices={"X": 5.0},
     )
     res = run(data, BASELINE)
     out = tables(data, res)
     assert len(out["reorder_plan.csv"]) == 0
     assert list(out["reorder_plan.csv"].columns) == list(ReorderLine.model_fields)
     assert len(out["monthly_projection.csv"]) == 24
-    assert out["scenario.csv"].shape == (16, 2)
+    assert out["scenario.csv"].shape == (1 + 6 + len(Kpis.model_fields), 2)
 
 
 def test_exports_do_not_mutate_inputs(real: PlannerData) -> None:

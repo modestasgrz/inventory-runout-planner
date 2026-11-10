@@ -47,6 +47,7 @@ def data(*products: Product, demand: int = 60) -> PlannerData:
         products=list(products),
         history={p.stock_code: [demand] * 24 for p in products},
         history_months=MONTHS,
+        prices={p.stock_code: 5.0 for p in products},
     )
 
 

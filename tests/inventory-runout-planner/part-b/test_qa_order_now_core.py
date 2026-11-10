@@ -41,6 +41,7 @@ def world(stocks_and_leads: list[tuple[int, int]]) -> PlannerData:
         products=products,
         history={p.stock_code: [DEMAND] * 24 for p in products},
         history_months=MONTHS,
+        prices={p.stock_code: 5.0 for p in products},
     )
 
 
@@ -169,14 +170,14 @@ def test_random_worlds_flag_matches_definition_and_kpi_matches_count(seed: int) 
     for p in res.products:
         idx = runout_index(months, p.runout_month)
         assert p.order_now is (idx is not None and idx <= p.lead_months + 1)
-    assert res.kpis.products_at_risk == sum(p.order_now for p in res.products)
+    assert res.kpis.products_at_risk == sum(p.at_risk_after_plan for p in res.products)
 
 
 @pytest.mark.parametrize("name", list(PRESETS))
 def test_real_data_every_preset_kpi_equals_count(name: str) -> None:
     res = run(load(DATA), PRESETS[name])
     months = [month_key(t) for t in range(1, 13)]
-    assert res.kpis.products_at_risk == sum(p.order_now for p in res.products)
+    assert res.kpis.products_at_risk == sum(p.at_risk_after_plan for p in res.products)
     for p in res.products:
         idx = runout_index(months, p.runout_month)
         assert p.order_now is (idx is not None and idx <= p.lead_months + 1)

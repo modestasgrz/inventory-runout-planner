@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 DEMAND_FILE = "demand_monthly.csv"
 PRODUCTS_FILE = "products_synthetic.csv"
+PRICES_FILE = "median_prices.csv"
 DEMAND_COLUMNS = ["stock_code", "description", "group", "month", "units"]
 MAX_UNITS = 10_000_000
 HISTORY_MONTHS = (
@@ -76,9 +77,26 @@ def load(data_dir: Path) -> PlannerData:
     missing = [p.stock_code for p in products if p.stock_code not in history]
     if missing:
         raise DataError(f"No demand history for: {', '.join(missing)}")
+    if not (data_dir / PRICES_FILE).is_file():
+        raise DataError(f"Data file not found: {PRICES_FILE}")
+    try:
+        price_table = pd.read_csv(data_dir / PRICES_FILE, dtype={"stock_code": str})
+        values = pd.to_numeric(price_table["median_price"], errors="coerce")
+        prices = {
+            str(c): float(v)
+            for c, v in zip(price_table["stock_code"], values, strict=True)
+        }
+    except (ValueError, KeyError, pd.errors.ParserError) as e:
+        raise DataError(f"{PRICES_FILE}: unreadable ({type(e).__name__})") from e
+    for p in products:
+        if not prices.get(p.stock_code, 0) > 0:
+            raise DataError(f"{PRICES_FILE}: no price for {p.stock_code}")
     logger.info(
         "Loaded {} products, {} history months", len(products), len(HISTORY_MONTHS)
     )
     return PlannerData(
-        products=products, history=history, history_months=HISTORY_MONTHS
+        products=products,
+        history=history,
+        history_months=HISTORY_MONTHS,
+        prices=prices,
     )

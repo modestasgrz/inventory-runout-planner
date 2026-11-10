@@ -2,8 +2,7 @@ from runout_toy import PAGES, app, texts
 
 
 def test_ac_25_notices() -> None:
-    """AC-25: every page shows the synthetic badge and 'Data as of Dec 2011' in the main area, no provenance sentence there;
-    the sidebar has the planning date and the attribution."""
+    """AC-25: badge and 'Data as of Dec 2011' in the main area; sidebar has the planning date and CC BY 4.0 but no DOI."""
     at = app().run()
     for page in PAGES:
         at.switch_page(page).run()
@@ -13,6 +12,5 @@ def test_ac_25_notices() -> None:
         assert "Planning as of" not in main, page
         side = texts(at.sidebar)
         assert "Planning as of 1 Dec 2011" in side, page
-        assert "Online Retail II" in side, page
         assert "CC BY 4.0" in side, page
-        assert "https://doi.org/10.24432/C5CG6D" in side, page
+        assert "10.24432/C5CG6D" not in side, page

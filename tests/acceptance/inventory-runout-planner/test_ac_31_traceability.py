@@ -7,7 +7,7 @@ def test_ac_31_traceability() -> None:
     """AC-31: every KPI metric has help text with its formula; Methodology shows the lead-time formula, the groups,
     the hand cases AC-07..AC-14 and the attribution."""
     at = app().run()
-    assert len(at.metric) == 4
+    assert len(at.metric) == 5
     for m in at.metric:
         assert m.proto.help.strip(), m.label
         assert "=" in m.proto.help, m.label

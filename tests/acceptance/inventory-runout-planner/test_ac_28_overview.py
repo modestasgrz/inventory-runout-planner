@@ -5,8 +5,8 @@ from runout_toy import app, of, real_data, texts
 
 
 def test_ac_28_overview() -> None:
-    """AC-28: Overview hero shows '<Title Case description> (84347)', Dec 2011, 'Limiting factor: lead time' and the
-    stock-out sentence; a flags table (Product before Code) lists 47566 as Overstocked."""
+    """AC-28: the run-out card shows '<Title Case description> (84347)', a Lead time chip, the status and cost lines,
+    no 'Expedite?' / '(funded)'; a flags table (Product before Code) lists 47566 as Overstocked."""
     data = real_data()
     description = next(p.description for p in data.products if p.stock_code == "84347")
     stockout = of(run(data, BASELINE), "84347").model_dump()["stockout"]
@@ -14,13 +14,11 @@ def test_ac_28_overview() -> None:
     assert not at.exception
     main = texts(at.main)
     assert f"{description.title()} (84347)" in main
-    assert "Dec 2011" in main
-    assert "Limiting factor: lead time" in main
-    lost = gbp(stockout["lost_sales_gbp"])
-    assert (
-        f"Out of stock 3 months (Dec 2011–Feb 2012), 1\u202f006 units, {lost} lost sales. Expedite?"
-        in main
-    )
+    assert "Lead time" in main
+    assert "Out of stock Dec 2011–Feb 2012, covered from Mar 2012" in main
+    assert f"{gbp(stockout['lost_sales_gbp'])} lost sales" in main
+    assert "Expedite?" not in main
+    assert "(funded)" not in main
     frames = [d.value for d in at.dataframe] + [t.value for t in at.table]
     flags = next(
         f

@@ -23,7 +23,9 @@ def test_ac_48_methodology_proof() -> None:
     assert (
         "£ tied up = (stock on hand − 6 months of average forecast) × unit cost" in main
     )
-    assert "Later shortfall not covered" in main
+    assert "Short after plan" in main
+    assert "Follow-up orders" in main
+    assert "band = forecast × (1 ± WAPE)" in main
     table = next(d.value for d in at.dataframe if list(d.value.columns) == COLUMNS)
     assert len(table) == 36
     seasonal = backtest(data, "seasonal_naive")

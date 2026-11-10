@@ -3,18 +3,32 @@ import tomllib
 
 from runout_toy import REPO
 
-FONT = '"Inter", "Avenir Next", "Helvetica Neue", Arial, sans-serif'
+FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
+TOKENS = {
+    "BG": "#0A0A0B",
+    "BORDER": "#26262A",
+    "MUTED": "#8A8A93",
+    "BLUE": "#3B82F6",
+    "AMBER": "#F59E0B",
+    "RED": "#EF4444",
+}
 
 
 def test_ac_34_theme_config() -> None:
-    """AC-34: config.toml theme is dark navy with the DEC-17 colors and font; style.css hides the number-input steppers."""
+    """AC-34: config.toml has the Graphite theme and system font; theme.py holds the Graphite tokens;
+    style.css hides the number-input steppers."""
     theme = tomllib.loads((REPO / ".streamlit" / "config.toml").read_text())["theme"]
     assert theme["base"] == "dark"
-    assert theme["backgroundColor"].upper() == "#0B1730"
-    assert theme["secondaryBackgroundColor"].upper() == "#13223F"
-    assert theme["textColor"].upper() == "#E6ECF5"
-    assert theme["primaryColor"].upper() == "#3B82F6"
+    assert theme["backgroundColor"].upper() == "#0A0A0B"
+    assert theme["secondaryBackgroundColor"].upper() == "#111113"
+    assert theme["textColor"].upper() == "#EDEDEF"
+    assert theme["primaryColor"].upper() == "#EDEDEF"
     assert theme["font"] == FONT
+    source = (REPO / "src" / "inventory_runout_planner" / "ui" / "theme.py").read_text()
+    for name, value in TOKENS.items():
+        assert re.search(
+            rf'^{name} = "{value}"', source, re.MULTILINE | re.IGNORECASE
+        ), name
     css = (REPO / "assets" / "style.css").read_text()
     for testid in ("stNumberInputStepUp", "stNumberInputStepDown"):
         rule = re.search(

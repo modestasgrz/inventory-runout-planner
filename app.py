@@ -1,5 +1,6 @@
 """Inventory run-out planner: entry file with the shared sidebar, notices and KPI strip (DEC-14, DEC-15)."""
 
+import html
 import os
 from fractions import Fraction
 
@@ -150,12 +151,34 @@ st.markdown(
     f'Dec 2010 vs what sold in Dec 2010–Nov 2011. Details on Methodology.">Forecast error {wape}% ⓘ</span></div>',
     unsafe_allow_html=True,
 )
+first = next(
+    (p for p in result.products if p.stock_code == k.earliest_runout_code), None
+)
+if navigation.title == "Overview":
+    st.markdown(
+        '<div class="how-to-read">'
+        f"<div><b>The question</b><span>Which products sell out in the next {scenario.horizon_months} months, "
+        f"and what should we buy with the {gbp(k.budget_gbp)} budget to stop it?</span></div>"
+        f"<div><b>Right now</b><span>{number(k.products_at_risk)} of {number(len(result.products))} products "
+        "run short. "
+        + (
+            f"The first, {html.escape(first.description.title())}, runs out {month(k.earliest_runout_month)}. "
+            if first is not None and k.earliest_runout_month
+            else ""
+        )
+        + f"The plan uses {gbp(k.funded_spend_gbp)}; {number(k.unfunded_orders)} orders don't fit "
+        f"({gbp(k.unfunded_gbp)}), so {gbp(k.lost_sales_after_plan_gbp)} of sales are still lost.</span></div>"
+        "<div><b>Do this</b><span>Order the red-outlined product below first, then work down <i>Order now</i>. "
+        "The full buying list is in <i>Reorder plan</i>.</span></div></div>",
+        unsafe_allow_html=True,
+    )
 cards = [
     (
         "At risk",
         number(k.products_at_risk),
         f"of {number(len(result.products))} products",
         (
+            "In plain words: how many products will still sell out at some point, even after buying what the plan suggests. "
             "At risk = products that still have unmet demand in some month of the horizon with the plan "
             "(lead time, unfunded orders, capacity, or more than 4 orders needed)."
         ),
@@ -165,8 +188,9 @@ cards = [
         month(k.earliest_runout_month)
         if k.earliest_runout_month
         else "None in horizon",
-        k.earliest_runout_code or "—",
+        first.description.title() if first is not None else "—",
         (
+            "In plain words: the first month any product runs out if you buy nothing; the line below names it. "
             "Earliest run-out = first month where forecast demand > opening stock + inbound, if nothing is ordered "
             "(ties: higher value at risk first)."
         ),
@@ -176,6 +200,7 @@ cards = [
         gbp(k.funded_spend_gbp),
         f"of {gbp(k.budget_gbp)}",
         (
+            "In plain words: how much of the purchase budget the plan uses. "
             "Spend = Σ (qty × unit cost) of funded orders; orders are funded in urgency order while they fit "
             f"the remaining budget. Suggested in total: {gbp(k.suggested_spend_gbp)}."
         ),
@@ -185,6 +210,7 @@ cards = [
         number(k.unfunded_orders),
         f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else "none",
         (
+            "In plain words: orders the plan would like to place but the budget can't pay for. "
             "Unfunded = suggested orders whose cost > budget left when their turn came, "
             "or follow-ups whose earlier order wasn't funded."
         ),
@@ -194,6 +220,7 @@ cards = [
         gbp(k.lost_sales_after_plan_gbp),
         f"{gbp(k.lost_sales_gbp)} if nothing ordered",
         (
+            "In plain words: sales missed because shelves are empty, even with the plan; the line below is the loss if you bought nothing. "
             "Lost sales = unmet units × median selling price (real UCI prices), over the whole horizon, "
             f"with every funded order. If nothing is ordered: {gbp(k.lost_sales_gbp)}."
         ),

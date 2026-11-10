@@ -7,6 +7,8 @@ html, body, [class*="css"], .stMarkdown, .stCaption { font-family: var(--font); 
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
+[data-testid="stSidebarNav"] a[aria-current="page"],
+[data-testid="stSidebarNavLink"][aria-current="page"] { background: var(--surface-2) !important; }
 h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 
 /* Number inputs are typed only (owner decision, DEC-17). */
@@ -18,7 +20,7 @@ h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 .page-head h1 { margin: 0 !important; padding: 0 !important; }
 .page-head .as-of { color: var(--muted); font-size: 0.9rem; }
 .synthetic-badge {
-  border: 1px solid var(--muted);
+  border: 1px solid var(--border);
   color: var(--muted);
   border-radius: 999px;
   padding: 2px 12px;
@@ -28,21 +30,20 @@ h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 .chip {
   display: inline-block;
   border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
+  background: none;
+  color: var(--muted);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 0.85rem;
-  font-weight: 500;
   white-space: nowrap;
   cursor: help;
 }
 
 /* KPI cards (DEC-14): equal, label one line, fixed label height so values sit level, grey sub-line. */
 [data-testid="stMetric"] {
-  background: var(--surface);
+  background: var(--card-fill);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   min-height: 136px;
 }
@@ -53,7 +54,7 @@ h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
   letter-spacing: 0.04em;
   white-space: nowrap !important;
 }
-[data-testid="stMetricValue"] { font-size: clamp(1.4rem, 2vw, 2rem); font-weight: 600; line-height: 1.25; white-space: nowrap; }
+[data-testid="stMetricValue"] { font-size: clamp(1.4rem, 2vw, 2rem); font-weight: 600; line-height: 1.25; white-space: nowrap; font-feature-settings: "tnum"; letter-spacing: 0; }
 [data-testid="stMetricValue"] * { overflow: visible !important; text-overflow: clip !important; }
 [data-testid="stMetricDelta"] { font-size: 0.8rem; background: none !important; padding: 0 !important; }
 [data-testid="stMetricDelta"], [data-testid="stMetricDelta"] * {
@@ -66,10 +67,10 @@ h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 
 /* Run-out card (DEC-22): one decision; red only on the left border, the chip and the £ figure. */
 .runout-hero {
-  background: var(--surface);
+  background: var(--card-fill);
   border: 1px solid var(--border);
   border-left: 4px solid var(--red);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 16px 22px;
   margin: 6px 0 18px;
 }
@@ -80,3 +81,11 @@ h1 { font-size: 2.1rem !important; padding-bottom: 0.2rem !important; }
 .runout-hero .reason { color: var(--muted); margin-top: 4px; font-size: 0.92rem; }
 .runout-hero .cost { color: var(--red); font-weight: 650; font-size: 1.15rem; margin-top: 8px; }
 .runout-hero .later { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+
+/* Hairline containers with one radius (DEC-17 Graphite). */
+[data-testid="stExpander"] details, [data-testid="stDataFrame"] { border-radius: var(--radius) !important; }
+
+/* Overview orientation strip (DEC-23): plain text, label column, no box. */
+.how-to-read { display: grid; gap: 3px; margin: -4px 0 14px; color: var(--muted); font-size: 0.9rem; }
+.how-to-read > div { display: grid; grid-template-columns: 110px 1fr; }
+.how-to-read b { color: var(--text); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.06em; padding-top: 2px; }

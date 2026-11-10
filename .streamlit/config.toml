@@ -1,10 +1,10 @@
 [theme]
 base = "dark"
-backgroundColor = "#0B1730"
-secondaryBackgroundColor = "#13223F"
-textColor = "#E6ECF5"
-primaryColor = "#3B82F6"
-font = '"Inter", "Avenir Next", "Helvetica Neue", Arial, sans-serif'
+backgroundColor = "#0A0A0B"
+secondaryBackgroundColor = "#111113"
+textColor = "#EDEDEF"
+primaryColor = "#EDEDEF"
+font = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
 
 [server]
 headless = true

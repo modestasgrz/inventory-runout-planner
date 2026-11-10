@@ -97,7 +97,9 @@ st.dataframe(
                     "Order by": month(p.order.order_month) if p.order else "no order",
                     "Qty": number(p.order.qty) if p.order else "",
                     "Cost £": number(p.order.cost_gbp) if p.order else "",
-                    "Funded": bool(p.order and p.order.funded),
+                    "Funded": ("✓ Funded" if p.order.funded else "Not funded")
+                    if p.order
+                    else "",
                     "Limiting factor": p.limiting_factor,
                 }
                 for p in order_now
@@ -122,7 +124,7 @@ st.dataframe(
         "Code": st.column_config.TextColumn(width="small"),
         "Qty": RIGHT,
         "Cost £": RIGHT,
-        "Funded": st.column_config.CheckboxColumn(width="small"),
+        "Funded": st.column_config.TextColumn(width="small"),
     },
 )
 
@@ -156,7 +158,7 @@ figure.update_layout(
     barmode="stack",
     height=280,
     margin={"t": 10},
-    yaxis={"dtick": 2},
+    yaxis={"dtick": 2, "title": "products"},
     uniformtext={"minsize": 11, "mode": "show"},
     legend={"orientation": "h", "x": 1, "xanchor": "right", "y": 1.12},
 )

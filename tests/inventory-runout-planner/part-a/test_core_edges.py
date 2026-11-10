@@ -144,6 +144,9 @@ def test_load_product_without_history(tmp_path: Path) -> None:
     pd.DataFrame([make("T2").model_dump()]).to_csv(
         tmp_path / "products_synthetic.csv", index=False
     )
+    pd.DataFrame({"stock_code": ["T2"], "median_price": [1.0]}).to_csv(
+        tmp_path / "median_prices.csv", index=False
+    )
     with pytest.raises(DataError, match="No demand history for: T2"):
         load(tmp_path)
 
@@ -161,6 +164,9 @@ def test_load_negative_units_is_a_data_error(tmp_path: Path) -> None:
     ).to_csv(tmp_path / "demand_monthly.csv", index=False)
     pd.DataFrame([make("T1").model_dump()]).to_csv(
         tmp_path / "products_synthetic.csv", index=False
+    )
+    pd.DataFrame({"stock_code": ["T1"], "median_price": [1.0]}).to_csv(
+        tmp_path / "median_prices.csv", index=False
     )
     with pytest.raises(DataError, match="units must be whole numbers"):
         load(tmp_path)

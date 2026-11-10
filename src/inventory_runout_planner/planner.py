@@ -266,7 +266,8 @@ def run(data: PlannerData, scenario: Scenario) -> ScenarioResult:
             )
         stockout = None
         if factor == "lead time" and runout is not None and arrival is not None:
-            gap = rows[runout - 1 : min(arrival - 1, horizon)]
+            arrives = ranked_line is not None and ranked_line.funded
+            gap = rows[runout - 1 : min(arrival - 1, horizon) if arrives else horizon]
             gap_units = sum(r.unmet for r in gap)
             stockout = Stockout(
                 start_month=gap[0].month,

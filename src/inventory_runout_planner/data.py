@@ -22,22 +22,27 @@ class DataError(Exception):
 
 
 def load(data_dir: Path) -> PlannerData:
-    """Read and check both data files; every problem becomes a DataError with a one-line message."""
-    for name in (DEMAND_FILE, PRODUCTS_FILE):
+    """Read and check the three data files; every problem becomes a DataError with a one-line message."""
+    for name in (DEMAND_FILE, PRODUCTS_FILE, PRICES_FILE):
         if not (data_dir / name).is_file():
             raise DataError(f"Data file not found: {name}")
     frames = {}
-    for name in (DEMAND_FILE, PRODUCTS_FILE):
+    for name in (DEMAND_FILE, PRODUCTS_FILE, PRICES_FILE):
         try:
             frames[name] = pd.read_csv(
                 data_dir / name, dtype={"stock_code": str, "month": str}
             )
         except (ValueError, pd.errors.ParserError) as e:
             raise DataError(f"{name}: unreadable ({type(e).__name__})") from e
-    demand, table = frames[DEMAND_FILE], frames[PRODUCTS_FILE]
+    demand, table, price_table = (
+        frames[DEMAND_FILE],
+        frames[PRODUCTS_FILE],
+        frames[PRICES_FILE],
+    )
     for name, frame, columns in (
         (DEMAND_FILE, demand, DEMAND_COLUMNS),
         (PRODUCTS_FILE, table, list(Product.model_fields)),
+        (PRICES_FILE, price_table, ["stock_code", "median_price"]),
     ):
         missing_columns = [c for c in columns if c not in frame.columns]
         if missing_columns:
@@ -77,17 +82,10 @@ def load(data_dir: Path) -> PlannerData:
     missing = [p.stock_code for p in products if p.stock_code not in history]
     if missing:
         raise DataError(f"No demand history for: {', '.join(missing)}")
-    if not (data_dir / PRICES_FILE).is_file():
-        raise DataError(f"Data file not found: {PRICES_FILE}")
-    try:
-        price_table = pd.read_csv(data_dir / PRICES_FILE, dtype={"stock_code": str})
-        values = pd.to_numeric(price_table["median_price"], errors="coerce")
-        prices = {
-            str(c): float(v)
-            for c, v in zip(price_table["stock_code"], values, strict=True)
-        }
-    except (ValueError, KeyError, pd.errors.ParserError) as e:
-        raise DataError(f"{PRICES_FILE}: unreadable ({type(e).__name__})") from e
+    values = pd.to_numeric(price_table["median_price"], errors="coerce")
+    prices = {
+        str(c): float(v) for c, v in zip(price_table["stock_code"], values, strict=True)
+    }
     for p in products:
         if not prices.get(p.stock_code, 0) > 0:
             raise DataError(f"{PRICES_FILE}: no price for {p.stock_code}")

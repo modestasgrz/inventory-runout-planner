@@ -13,10 +13,12 @@ def test_ac_35_at_risk_order_now() -> None:
         product("T0005", stock_on_hand=1000),
     )
     assert of(result, "T0006").runout_month == "2012-05"
-    assert result.kpis.products_at_risk == 2
+    assert sum(p.order_now for p in result.products) == 2
 
     data = real_data()
-    base = run(data, BASELINE).kpis.products_at_risk
-    delay = run(data, PRESETS["Supplier delay +3 weeks"]).kpis.products_at_risk
+    base = sum(p.order_now for p in run(data, BASELINE).products)
+    delay = sum(
+        p.order_now for p in run(data, PRESETS["Supplier delay +3 weeks"]).products
+    )
     assert base < delay
     assert base <= 10

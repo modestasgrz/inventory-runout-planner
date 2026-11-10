@@ -121,9 +121,9 @@ def test_order_now_table_matches_core(case: str, real: PlannerData) -> None:
         if p.order:
             assert row["Qty"] == number(p.order.qty)
             assert row["Cost £"] == number(p.order.cost_gbp)
-            assert bool(row["Funded"]) == p.order.funded
+            assert row["Funded"] == ("✓ Funded" if p.order.funded else "Not funded")
         else:
-            assert not row["Funded"]
+            assert row["Funded"] == ""
 
 
 @pytest.mark.parametrize("method", ["seasonal_naive", "trailing_3m"])

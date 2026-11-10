@@ -53,7 +53,14 @@ def expected(result: ScenarioResult) -> dict[str, tuple[str, str]]:
             month(k.earliest_runout_month)
             if k.earliest_runout_month
             else "None in horizon",
-            k.earliest_runout_code or "—",
+            next(
+                (
+                    p.description.title()
+                    for p in result.products
+                    if p.stock_code == k.earliest_runout_code
+                ),
+                "—",
+            ),
         ),
         "Spend": (gbp(k.funded_spend_gbp), f"of {gbp(k.budget_gbp)}"),
         "Unfunded": (

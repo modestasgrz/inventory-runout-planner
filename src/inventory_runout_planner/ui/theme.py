@@ -7,18 +7,21 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-BG = "#0B1730"
-SURFACE = "#13223F"
-SURFACE_2 = "#1A2D52"
-BORDER = "#26406E"
-TEXT = "#E6ECF5"
-MUTED = "#9DB0CC"
+# Graphite (DEC-17, Change 5): neutral near-black, hairline transparent cards, neutral UI controls.
+BG = "#0A0A0B"
+SURFACE = "#111113"
+SURFACE_2 = "#1C1C1F"
+BORDER = "#26262A"
+TEXT = "#EDEDEF"
+MUTED = "#8A8A93"
 BLUE = "#3B82F6"
 GREEN = "#22C55E"
 AMBER = "#F59E0B"
 RED = "#EF4444"
-SLATE = "#94A3B8"
-FONT = '"Inter", "Avenir Next", "Helvetica Neue", Arial, sans-serif'
+SLATE = "#9A9AA3"
+FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
+RADIUS = "6px"
+CARD_FILL = "transparent"
 TEMPLATE = "runout_dark"
 
 # Colour language (DEC-17, Change 4): red = out of stock / lead time, amber = budget / unfunded, blue = funded / plan,
@@ -35,8 +38,8 @@ CSS_FILE = Path(__file__).resolve().parents[3] / "assets" / "style.css"
 
 pio.templates[TEMPLATE] = go.layout.Template(
     layout={
-        "paper_bgcolor": SURFACE,
-        "plot_bgcolor": SURFACE,
+        "paper_bgcolor": BG,
+        "plot_bgcolor": BG,
         "font": {"family": FONT, "color": TEXT, "size": 13},
         "colorway": [BLUE, GREEN, AMBER, RED, MUTED],
         "xaxis": {"gridcolor": BORDER, "linecolor": BORDER, "zerolinecolor": BORDER},
@@ -53,28 +56,30 @@ def apply() -> None:
     variables = (
         f":root {{--bg: {BG}; --surface: {SURFACE}; --surface-2: {SURFACE_2}; --border: {BORDER}; "
         f"--text: {TEXT}; --muted: {MUTED}; --blue: {BLUE}; --green: {GREEN}; --amber: {AMBER}; --red: {RED}; --slate: {SLATE}; "
-        f"--font: {FONT};}}"
+        f"--font: {FONT}; --radius: {RADIUS}; --card-fill: {CARD_FILL};}}"
     )
     st.html(f"<style>{variables}\n{CSS_FILE.read_text()}</style>")
 
 
 def styled(frame: pd.DataFrame) -> "pd.io.formats.style.Styler":
-    """Limiting factor as coloured text; unfunded rows amber-tinted with an amber Status, the same on every table."""
+    """Limiting factor as coloured text; Funded/Status text blue or amber; unfunded plan rows amber-tinted."""
     styler = frame.style
     if "Limiting factor" in frame.columns:
         styler = styler.map(
             lambda v: f"color: {FACTOR_COLORS.get(v, TEXT)}; font-weight: 600",
             subset=["Limiting factor"],
         )
-    if "Status" in frame.columns:
+    for column in {"Funded", "Status"} & set(frame.columns):
         styler = styler.map(
             lambda v: (
                 f"color: {AMBER}; font-weight: 600"
                 if v == "Not funded"
                 else f"color: {BLUE}"
             ),
-            subset=["Status"],
-        ).apply(
+            subset=[column],
+        )
+    if "Status" in frame.columns:
+        styler = styler.apply(
             lambda row: (
                 [
                     "background-color: rgba(245, 158, 11, 0.12)"

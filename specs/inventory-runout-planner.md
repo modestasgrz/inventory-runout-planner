@@ -1,6 +1,6 @@
 # Inventory run-out planner
 
-Status: draft (Change 4) | Date: 2026-11-10 | Owner: Modestas
+Status: approved (Change 4) | Date: 2026-11-10 | Owner: Modestas
 
 ## Goal
 A purchasing manager today keeps a spreadsheet to answer "what runs out, when, and what do I reorder within this month's budget". This app replaces that spreadsheet for a generic retail/wholesale catalogue: real public monthly demand for 36 products plus clearly labelled synthetic stock data, a what-if scenario sidebar, and a ranked reorder plan where every number can be traced to its formula and inputs.

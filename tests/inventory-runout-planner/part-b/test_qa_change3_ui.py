@@ -1,5 +1,7 @@
+"""Change 3 UI that Change 4 kept: Order now table (AC-40), Methodology backtest (AC-48), every flag group on toy data.
+KPI cards, run-out card, header chip, flag sums, Reorder plan and Scenarios checks moved to test_qa_change4_ui.py."""
+
 import html
-import re
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -15,20 +17,6 @@ from streamlit.testing.v1 import AppTest
 
 REPO = Path(__file__).resolve().parents[3]
 DATA = REPO / "data"
-PAGES = [
-    "app_pages/overview.py",
-    "app_pages/forecast.py",
-    "app_pages/scenarios.py",
-    "app_pages/reorder_plan.py",
-    "app_pages/methodology.py",
-]
-KPI_ORDER = [
-    "Products at risk",
-    "Earliest run-out",
-    "Purchase spend",
-    "Unfunded orders",
-    "Lost sales after plan",
-]
 EDGES: dict[str, dict[str, Any]] = {
     "budget 0": {"budget_gbp": 0},
     "horizon 6": {"horizon_months": 6},
@@ -45,20 +33,9 @@ FLAG_TYPES = [
     "Lead time",
     "Budget not funded",
     "Capacity blocks order",
-    "Later shortfall not covered",
+    "Short after plan",
     "Overstocked",
     "Inbound arrives after horizon",
-]
-REORDER_COLUMNS = [
-    "Urgency rank",
-    "Product",
-    "Code",
-    "Order month",
-    "Arrives",
-    "Qty",
-    "Cost",
-    "Funded",
-    "Limiting factor",
 ]
 ORDER_NOW_COLUMNS = [
     "Product",
@@ -93,57 +70,20 @@ def start(case: str) -> AppTest:
 
 def text(at: AppTest) -> str:
     parts = [str(m.value) for m in at.markdown] + [str(c.value) for c in at.caption]
-    parts += [str(s.value) for s in at.subheader] + [str(s.value) for s in at.success]
     return html.unescape("\n".join(parts))
-
-
-def strip_tags(s: str) -> str:
-    return re.sub(r"<[^>]+>", "", s)
-
-
-def cards(at: AppTest) -> list[tuple[str, str, str]]:
-    return [(m.label, str(m.value), str(m.proto.delta)) for m in at.metric]
-
-
-def expected_cards(r: ScenarioResult, overview: bool) -> list[tuple[str, str, str]]:
-    k = r.kpis
-    rows = [
-        ("Products at risk", number(k.products_at_risk), ""),
-        (
-            "Earliest run-out",
-            month(k.earliest_runout_month)
-            if k.earliest_runout_month
-            else "None in horizon",
-            k.earliest_runout_code or "",
-        ),
-        ("Purchase spend", gbp(k.funded_spend_gbp), f"of {gbp(k.budget_gbp)}"),
-        (
-            "Unfunded orders",
-            number(k.unfunded_orders),
-            f"{gbp(k.unfunded_gbp)} short" if k.unfunded_orders else "",
-        ),
-        (
-            "Lost sales after plan",
-            gbp(k.lost_sales_after_plan_gbp),
-            f"{gbp(k.lost_sales_gbp)} if nothing ordered",
-        ),
-    ]
-    return [c for c in rows if not (overview and c[0] == "Earliest run-out")]
 
 
 def expected_flag_groups(r: ScenarioResult) -> dict[str, tuple[int, float]]:
     ps = r.products
     groups = {
         "Lead time": [p.stockout.lost_sales_gbp for p in ps if p.stockout],
-        "Budget not funded": [
-            p.order.cost_gbp for p in ps if p.order and not p.order.funded
-        ],
+        "Budget not funded": [o.cost_gbp for p in ps for o in p.orders if not o.funded],
         "Capacity blocks order": [
-            p.lost_sales_gbp
+            p.lost_sales_after_plan_gbp
             for p in ps
             if any(f.startswith("Capacity blocks order") for f in p.flags)
         ],
-        "Later shortfall not covered": [
+        "Short after plan": [
             p.later_shortfall_gbp for p in ps if p.later_shortfall_units > 0
         ],
         "Overstocked": [
@@ -162,106 +102,9 @@ def expected_flag_groups(r: ScenarioResult) -> dict[str, tuple[int, float]]:
     }
 
 
-def hero_sentence(r: ScenarioResult) -> str | None:
-    earliest = next(
-        (p for p in r.products if p.stock_code == r.kpis.earliest_runout_code), None
-    )
-    if earliest is None or earliest.stockout is None:
-        return None
-    s = earliest.stockout
-    span = (
-        f"1 month ({month(s.start_month)})"
-        if s.months == 1
-        else f"{s.months} months ({month(s.start_month)}–{month(s.end_month)})"
-    )
-    return f"Out of stock {span}, {number(s.units)} units, {gbp(s.lost_sales_gbp)} lost sales. Expedite?"
-
-
 @pytest.fixture(scope="module")
 def real() -> PlannerData:
     return load(DATA)
-
-
-@pytest.mark.parametrize("case", list(CASES))
-def test_all_pages_render_and_kpis_equal_core(case: str, real: PlannerData) -> None:
-    r = run(real, CASES[case])
-    at = start(case)
-    seen: dict[str, tuple[str, str]] = {}
-    for page in PAGES:
-        at.switch_page(page).run()
-        assert not at.exception, (case, page)
-        assert not at.error, (case, page, [e.value for e in at.error])
-        got = cards(at)
-        overview = page.endswith("overview.py")
-        assert [c[0] for c in got] == [
-            x for x in KPI_ORDER if not (overview and x == "Earliest run-out")
-        ], page
-        assert got == expected_cards(r, overview), (case, page)
-        for label, value, sub in got:
-            assert seen.setdefault(label, (value, sub)) == (value, sub), (
-                case,
-                page,
-                label,
-            )
-        assert all("=" in str(m.help) for m in at.metric), (case, page)
-
-
-@pytest.mark.parametrize("case", list(CASES))
-def test_overview_flag_groups_match_core(case: str, real: PlannerData) -> None:
-    r = run(real, CASES[case])
-    expected = expected_flag_groups(r)
-    at = start(case)
-    assert not at.exception
-    shown = [e for e in at.expander if e.label.split(" · ")[0] in FLAG_TYPES]
-    names = [e.label.split(" · ")[0] for e in shown]
-    assert sorted(names) == sorted(expected), case
-    if "Lead time" in names:
-        assert names[0] == "Lead time", (case, names)
-    totals = [expected[n][1] for n in names if n != "Lead time"]
-    assert totals == sorted(totals, reverse=True), (case, names, totals)
-    for e in shown:
-        parts = e.label.split(" · ")
-        name = parts[0]
-        count, total = expected[name]
-        assert parts[1] == number(count), (case, e.label)
-        if name == "Inbound arrives after horizon":
-            assert len(parts) == 2, e.label
-        else:
-            assert len(parts) == 3, e.label
-            assert parts[2].startswith(gbp(total) + " "), (case, e.label, gbp(total))
-        assert e.proto.expanded == (name == "Lead time"), (case, e.label)
-        frame = e.dataframe[0].value
-        assert len(frame) == count, (case, name)
-        cols = list(frame.columns)
-        assert cols.index("Product") < cols.index("Code")
-    k = r.kpis
-    if k.unfunded_orders:
-        assert expected["Budget not funded"] == (k.unfunded_orders, k.unfunded_gbp)
-    if "Later shortfall not covered" in expected:
-        assert expected["Later shortfall not covered"][1] == k.later_shortfall_gbp
-    if "Overstocked" in expected:
-        assert expected["Overstocked"][1] == k.tied_up_gbp
-
-
-@pytest.mark.parametrize("case", list(CASES))
-def test_overview_hero_and_wape_match_core(case: str, real: PlannerData) -> None:
-    r = run(real, CASES[case])
-    at = start(case)
-    page = text(at)
-    k = r.kpis
-    if k.earliest_runout_code:
-        p = next(x for x in r.products if x.stock_code == k.earliest_runout_code)
-        hero = strip_tags(page)
-        assert f"{p.description.title()} ({p.stock_code})" in hero
-        assert month(k.earliest_runout_month or "") in hero
-        assert f"Limiting factor: {k.earliest_limiting_factor}" in hero
-    sentence = hero_sentence(r)
-    if sentence:
-        assert sentence in strip_tags(page), case
-    else:
-        assert "Out of stock" not in strip_tags(page), case
-    wape = whole(backtest(real, r.scenario.method).overall_pct)
-    assert f"Weighted forecast error (WAPE) last year: {wape}%" in page, case
 
 
 @pytest.mark.parametrize("case", list(CASES))
@@ -281,61 +124,6 @@ def test_order_now_table_matches_core(case: str, real: PlannerData) -> None:
             assert bool(row["Funded"]) == p.order.funded
         else:
             assert not row["Funded"]
-
-
-@pytest.mark.parametrize("case", list(CASES))
-def test_reorder_plan_order_funded_and_stock_value(
-    case: str, real: PlannerData
-) -> None:
-    r = run(real, CASES[case])
-    at = start(case)
-    at.switch_page("app_pages/reorder_plan.py").run()
-    assert not at.exception
-    frame = next(d.value for d in at.dataframe if "Urgency rank" in d.value.columns)
-    assert list(frame.columns) == REORDER_COLUMNS
-    assert "Reason" not in frame.columns
-    ordered = sorted(r.plan, key=lambda line: (line.order_month, line.rank))
-    assert list(frame["Urgency rank"]) == [line.rank for line in ordered]
-    assert frame["Funded"].dtype == bool
-    assert list(frame["Funded"]) == [line.funded for line in ordered]
-    assert list(frame["Cost"]) == [gbp(line.cost_gbp) for line in ordered]
-    assert list(frame["Qty"]) == [number(line.qty) for line in ordered]
-    assert list(frame["Order month"]) == [month(line.order_month) for line in ordered]
-    page = text(at)
-    assert f"Stock value: {gbp(r.kpis.stock_value_gbp)}" in page
-    assert f"Funded total: {gbp(r.kpis.funded_spend_gbp)}" in page
-    why = next(e for e in at.expander if e.label.startswith("Why each order"))
-    reasons = html.unescape("\n".join(str(m.value) for m in why.markdown))
-    for line in r.plan:
-        assert line.reason in reasons, line.stock_code
-    if r.scenario.budget_gbp == 0:
-        assert not frame["Funded"].any()
-
-
-@pytest.mark.parametrize("case", ["Baseline", "budget 0", "growth 100", "delay 26"])
-def test_scenarios_table_independent_of_current_scenario(
-    case: str, real: PlannerData
-) -> None:
-    at = start(case)
-    at.switch_page("app_pages/scenarios.py").run()
-    assert not at.exception
-    frame = next(d.value for d in at.dataframe if "Preset" in d.value.columns)
-    assert list(frame["Preset"]) == list(PRESETS)
-    for (_, row), (name, preset) in zip(frame.iterrows(), PRESETS.items(), strict=True):
-        k = run(real, preset).kpis
-        assert row["Products at risk"] == k.products_at_risk, name
-        assert row["Unfunded orders"] == k.unfunded_orders, name
-        assert row["Unfunded £"] == whole(k.unfunded_gbp), name
-        assert row["Lost sales £"] == whole(k.lost_sales_after_plan_gbp), name
-        assert row["Stock-out months"] == k.stockout_months, name
-        assert row["Earliest run-out"] == (
-            f"{month(k.earliest_runout_month)} · {k.earliest_runout_code}"
-            if k.earliest_runout_month
-            else "None"
-        ), name
-        assert "(" not in str(row["Earliest run-out"])
-    s = CASES[case]
-    assert gbp(s.budget_gbp) in strip_tags(text(at))
 
 
 @pytest.mark.parametrize("method", ["seasonal_naive", "trailing_3m"])
@@ -372,16 +160,6 @@ def test_methodology_numbers_equal_backtest(method: str, real: PlannerData) -> N
             )
             <= 0.5
         )
-
-
-def test_overview_wape_follows_selected_method(real: PlannerData) -> None:
-    seasonal = whole(backtest(real, "seasonal_naive").overall_pct)
-    trailing = whole(backtest(real, "trailing_3m").overall_pct)
-    assert seasonal != trailing
-    at = start("trailing_3m")
-    assert f"Weighted forecast error (WAPE) last year: {trailing}%" in text(at)
-    at.radio(key="method").set_value("seasonal_naive").run()
-    assert f"Weighted forecast error (WAPE) last year: {seasonal}%" in text(at)
 
 
 TOY_DEFAULTS: dict[str, Any] = {
@@ -423,80 +201,6 @@ def write_toy(directory: Path, products: dict[str, dict[str, Any]]) -> None:
     ).to_csv(directory / "median_prices.csv", index=False)
 
 
-def toy_app(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, products: dict[str, dict[str, Any]]
-) -> tuple[AppTest, ScenarioResult]:
-    write_toy(tmp_path, products)
-    monkeypatch.setenv("RUNOUT_DATA_DIR", str(tmp_path))
-    at = AppTest.from_file(str(REPO / "app.py"), default_timeout=30).run()
-    return at, run(load(tmp_path), BASELINE)
-
-
-def test_hero_one_month_stockout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    at, r = toy_app(tmp_path, monkeypatch, {"T0007": {"stock_on_hand": 30}})
-    assert not at.exception
-    p = r.products[0]
-    assert p.limiting_factor == "lead time"
-    assert p.stockout is not None and p.stockout.months == 1
-    page = strip_tags(text(at))
-    assert "Toy Item T0007 (T0007)" in page
-    assert (
-        f"Out of stock 1 month (Dec 2011), 30 units, {gbp(p.stockout.lost_sales_gbp)} lost sales. Expedite?"
-        in page
-    )
-    assert "–" not in page.split("Out of stock")[1].split("Expedite?")[0]
-
-
-def test_hero_two_month_stockout_toy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    at, _ = toy_app(tmp_path, monkeypatch, {"T0002": {"lead_time_weeks": 10}})
-    assert not at.exception
-    page = strip_tags(text(at))
-    assert (
-        "Out of stock 2 months (Jan 2012–Feb 2012), 80 units, £400 lost sales. Expedite?"
-        in page
-    )
-    assert "Limiting factor: lead time" in page
-
-
-def test_hero_stock_limited_has_no_stockout_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    at, _ = toy_app(tmp_path, monkeypatch, {"T0001": {}})
-    assert not at.exception
-    page = strip_tags(text(at))
-    assert "Toy Item T0001 (T0001)" in page
-    assert "Limiting factor: stock" in page
-    assert "Out of stock" not in page
-
-
-def test_no_runout_anywhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    at, r = toy_app(
-        tmp_path,
-        monkeypatch,
-        {"T0005": {"stock_on_hand": 1000}, "T0008": {"stock_on_hand": 2000}},
-    )
-    assert not at.exception
-    assert r.kpis.earliest_runout_code is None
-    page = strip_tags(text(at))
-    assert "Out of stock" not in page
-    assert "Limiting factor:" not in page
-    labels = [e.label for e in at.expander]
-    assert any(label.startswith("Overstocked · 2 · ") for label in labels), labels
-    for page_file in PAGES[1:]:
-        at.switch_page(page_file).run()
-        assert not at.exception, page_file
-        earliest = next(m for m in at.metric if m.label == "Earliest run-out")
-        assert str(earliest.value) == "None in horizon"
-        assert str(earliest.proto.delta) == ""
-    at.switch_page("app_pages/scenarios.py").run()
-    frame = next(d.value for d in at.dataframe if "Preset" in d.value.columns)
-    assert set(frame["Earliest run-out"]) == {"None"}
-
-
 def test_toy_flag_groups_every_type(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -518,7 +222,7 @@ def test_toy_flag_groups_every_type(
         "Lead time",
         "Budget not funded",
         "Capacity blocks order",
-        "Later shortfall not covered",
+        "Short after plan",
         "Overstocked",
         "Inbound arrives after horizon",
     } <= set(expected), expected
@@ -541,6 +245,10 @@ def test_toy_flag_groups_every_type(
     assert order[0] == "Lead time"
     rest = [expected[n][1] for n in order[1:]]
     assert rest == sorted(rest, reverse=True)
-    assert (
-        shown["Budget not funded"].split(" · ")[2].startswith(gbp(r.kpis.unfunded_gbp))
+    assert shown["Budget not funded"] == (
+        f"Budget not funded · {number(r.kpis.unfunded_orders)} · {gbp(r.kpis.unfunded_gbp)} short"
     )
+    assert shown["Short after plan"] == (
+        f"Short after plan · {number(expected['Short after plan'][0])} · {gbp(r.kpis.later_shortfall_gbp)} lost sales"
+    )
+    assert not any(e.label.startswith("Later shortfall") for e in at.expander)

@@ -12,83 +12,93 @@ data: PlannerData = st.session_state["data"]
 k = result.kpis
 
 st.caption(
-    "The next order per product, ranked by run-out month, then value at risk (unmet units × unit cost). "
-    "Orders are funded in rank order; one that doesn't fit the budget left is skipped and smaller ones below it can still be funded."
+    "The next order per product, listed by order month. Urgency rank = run-out month, then value at risk "
+    "(unmet units × unit cost); orders are funded in urgency order, and one that doesn't fit the budget left is skipped "
+    "so smaller ones below it can still be funded. Unfunded rows are tinted amber."
 )
 
 st.markdown(
-    f"**Funded total: {gbp(k.funded_spend_gbp)}** of {gbp(k.budget_gbp)} budget · suggested {gbp(k.suggested_spend_gbp)} · {number(k.unfunded_orders)} unfunded"
+    f"**Funded total: {gbp(k.funded_spend_gbp)}** of {gbp(k.budget_gbp)} budget · suggested {gbp(k.suggested_spend_gbp)} · "
+    f"{number(k.unfunded_orders)} unfunded ({gbp(k.unfunded_gbp)}) · Stock value: {gbp(k.stock_value_gbp)} (stock on hand × unit cost)"
 )
 figure = go.Figure()
-figure.add_bar(
-    y=["Spend"],
-    x=[k.funded_spend_gbp],
-    orientation="h",
-    name="Funded",
-    marker_color=theme.BLUE,
-)
-figure.add_bar(
-    y=["Spend"],
-    x=[k.suggested_spend_gbp - k.funded_spend_gbp],
-    orientation="h",
-    name="Not funded",
-    marker_color=theme.AMBER,
-)
-figure.add_vline(
-    x=k.budget_gbp,
-    line={"color": theme.TEXT, "dash": "dash"},
-    annotation_text="Budget",
-    annotation_position="top",
-)
+for name, value, color in [
+    ("Funded", k.funded_spend_gbp, theme.BLUE),
+    ("Not funded", k.unfunded_gbp, theme.AMBER),
+]:
+    figure.add_bar(
+        y=["Spend"],
+        x=[value],
+        orientation="h",
+        name=name,
+        marker_color=color,
+        text=[f"{name} {gbp(value)}"],
+        textposition="inside",
+        insidetextanchor="middle",
+    )
+figure.add_vline(x=k.budget_gbp, line={"color": theme.TEXT, "dash": "dash"})
 figure.update_layout(
     template=theme.TEMPLATE,
     barmode="stack",
-    height=170,
+    height=90,
+    showlegend=False,
     xaxis={"tickprefix": "£"},
-    margin={"t": 30, "b": 40},
+    yaxis={"visible": False},
+    margin={"t": 4, "b": 24, "l": 8, "r": 8},
 )
 st.plotly_chart(figure, width="stretch")
+st.caption(
+    "Dashed line = budget. Limiting factor *none* means the product doesn't run out in the horizon: the order only "
+    "tops stock back up to safety stock before it would dip below it."
+)
 
+ordered = sorted(result.plan, key=lambda line: (line.order_month, line.rank))
 st.dataframe(
-    pd.DataFrame(
-        [
-            {
-                "Rank": line.rank,
-                "Product": line.description,
-                "Code": line.stock_code,
-                "Order month": month(line.order_month),
-                "Arrives": month(line.arrival_month),
-                "Qty": number(line.qty),
-                "Cost": gbp(line.cost_gbp, pence=True),
-                "Funded": "Yes" if line.funded else "No",
-                "Limiting factor": line.limiting_factor,
-                "Reason": line.reason,
-            }
-            for line in result.plan
-        ],
-        columns=[
-            "Rank",
-            "Product",
-            "Code",
-            "Order month",
-            "Arrives",
-            "Qty",
-            "Cost",
-            "Funded",
-            "Limiting factor",
-            "Reason",
-        ],
+    theme.styled(
+        pd.DataFrame(
+            [
+                {
+                    "Urgency rank": line.rank,
+                    "Product": line.description,
+                    "Code": line.stock_code,
+                    "Order month": month(line.order_month),
+                    "Arrives": month(line.arrival_month),
+                    "Qty": number(line.qty),
+                    "Cost": gbp(line.cost_gbp),
+                    "Funded": line.funded,
+                    "Limiting factor": line.limiting_factor,
+                }
+                for line in ordered
+            ],
+            columns=[
+                "Urgency rank",
+                "Product",
+                "Code",
+                "Order month",
+                "Arrives",
+                "Qty",
+                "Cost",
+                "Funded",
+                "Limiting factor",
+            ],
+        )
     ),
     hide_index=True,
     width="stretch",
-    height=35 * len(result.plan) + 38,
+    height=35 * len(ordered) + 38,
     column_config={
-        "Rank": st.column_config.NumberColumn(width="small"),
-        "Product": st.column_config.TextColumn(width="medium"),
+        "Urgency rank": st.column_config.NumberColumn(
+            width="small",
+            help="1 = most urgent: earliest run-out, then highest value at risk",
+        ),
+        "Product": st.column_config.TextColumn(width=240),
+        "Order month": st.column_config.TextColumn(width=95),
+        "Arrives": st.column_config.TextColumn(width="small"),
+        "Limiting factor": st.column_config.TextColumn(width=100),
         "Code": st.column_config.TextColumn(width="small"),
-        "Qty": st.column_config.TextColumn(width="small"),
-        "Funded": st.column_config.TextColumn(width="small"),
-        "Reason": st.column_config.TextColumn(width="medium"),
+        "Qty": st.column_config.TextColumn(width="small", alignment="right"),
+        "Cost": st.column_config.TextColumn(width="small", alignment="right"),
+        "Funded": st.column_config.CheckboxColumn(width="small"),
     },
 )
 

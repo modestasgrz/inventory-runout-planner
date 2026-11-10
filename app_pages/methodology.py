@@ -1,6 +1,17 @@
+from fractions import Fraction
+
 import pandas as pd
 import streamlit as st
+from inventory_runout_planner.models import PlannerData
+from inventory_runout_planner.planner import backtest, half_up
 from inventory_runout_planner.presets import ATTRIBUTION
+
+data: PlannerData = st.session_state["data"]
+
+
+def whole(x: float) -> int:
+    return half_up(Fraction(str(x)))
+
 
 st.caption(
     "Every number in the app comes from these rules. The calculation core is plain Python with unit tests; nothing is estimated by hand."
@@ -37,19 +48,71 @@ st.markdown(
 - **Limiting factor:** no run-out → *none*; the order would arrive after the run-out → *lead time*; no order fits the warehouse → *capacity*;
   the order isn't funded → *budget*; otherwise *stock* (ordering now prevents the run-out).
 
+### Money
+- **Lost sales = unmet units × median selling price** (the product's real median price in the UCI data).
+  *If nothing is ordered*: unmet units over the whole horizon. *After plan*: unmet units with the funded orders,
+  up to the end of each order's 3-month cover (the month it arrives + 2); with no funded order, the whole horizon.
+- **Later shortfall not covered**: unmet units after that cover ends, which need a further order. The plan holds only
+  the next order per product, so these are flagged with their own £ and not counted in lost sales after plan.
+- **Out of stock (lead time)**: when an order can't arrive before the run-out, the months from the run-out until it
+  arrives (or to the horizon if nothing arrives), their unmet units and lost sales.
+- **£ tied up = (stock on hand − 6 months of average forecast) × unit cost**, for overstocked products.
+
 ### KPIs
-- **Products at risk** = products that run out within their lead time + 1 month if nothing is ordered (order now).
+- **Products at risk** = products that still lose sales after the plan (unfunded, lead-time or capacity blocked, or an order too small to cover), within that cover window.
+- **Order now** (Overview table) = products that run out within their lead time + 1 month if nothing is ordered.
 - **Earliest run-out** = the product with the earliest run-out month (ties: higher value at risk).
-- **Purchase spend** = Σ cost of funded orders, shown against the budget. **Unfunded orders** = suggested orders not funded. **Stock value** = Σ stock on hand × unit cost.
+- **Purchase spend** = Σ cost of funded orders, shown against the budget. **Unfunded orders** = suggested orders not funded. **Stock value** = Σ stock on hand × unit cost (on Reorder plan).
 - **Overstocked** flag = stock on hand > 6 months of average forecast demand.
 """
+)
+
+st.subheader("How good is the forecast? A backtest on real demand")
+seasonal = backtest(data, "seasonal_naive")
+trailing = backtest(data, "trailing_3m")
+mapes = [r.mape_pct for r in seasonal.rows if r.mape_pct is not None]
+st.markdown(
+    "Each method forecasts Dec 2010–Nov 2011 from the 12 months before (made in Dec 2010, no growth), "
+    "then the forecast is checked against what actually sold.\n\n"
+    "**WAPE = Σ |actual − forecast| ÷ Σ actual** over all products and months: big sellers weigh more, "
+    "and a month that sold almost nothing can't blow it up.\n\n"
+    f"- Weighted forecast error (WAPE), seasonal naive: {whole(seasonal.overall_pct)}%\n"
+    f"- Weighted forecast error (WAPE), trailing 3-month: {whole(trailing.overall_pct)}%\n"
+    f"- Plain average of per-product MAPE, seasonal naive: {whole(sum(mapes) / len(mapes))}% — inflated: MAPE divides "
+    "each month's error by that month's sales, so a month with a handful of sales and a normal forecast scores "
+    "hundreds or thousands of percent."
+)
+trailing_mape = {r.stock_code: r.mape_pct for r in trailing.rows}
+st.dataframe(
+    pd.DataFrame(
+        [
+            {
+                "Product": r.description,
+                "Code": r.stock_code,
+                "MAPE seasonal naive %": None
+                if r.mape_pct is None
+                else whole(r.mape_pct),
+                "MAPE trailing 3-month %": None
+                if (m := trailing_mape[r.stock_code]) is None
+                else whole(m),
+            }
+            for r in seasonal.rows
+        ]
+    ),
+    hide_index=True,
+    width="stretch",
+    height=300,
+    column_config={
+        "Product": st.column_config.TextColumn(width="large"),
+        "Code": st.column_config.TextColumn(width="small"),
+    },
 )
 
 st.subheader("Hand-calculated test cases")
 st.caption(
     "Toy products, 60 units of demand every month, horizon 6 months, budget £1 000, safety 1 month, lead 4 weeks, MOQ 50, capacity 400, unit cost £2.00 unless stated. Each row is an automated acceptance test."
 )
-st.dataframe(
+st.table(
     pd.DataFrame(
         [
             [
@@ -92,7 +155,6 @@ st.dataframe(
         columns=["Test", "Setup", "Expected result"],
     ),
     hide_index=True,
-    width="stretch",
 )
 
 st.subheader("Sources")

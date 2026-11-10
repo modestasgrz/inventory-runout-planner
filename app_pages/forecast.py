@@ -44,13 +44,13 @@ figure.add_scatter(
     x=forecast_x,
     y=[r.demand for r in p.months],
     name="Forecast demand",
-    line={"color": theme.BLUE, "dash": "dash"},
+    line={"color": theme.TEXT, "dash": "dot", "width": 1.5},
 )
 figure.add_scatter(
     x=forecast_x,
     y=[r.closing for r in p.months],
     name="Stock, do nothing",
-    line={"color": theme.RED},
+    line={"color": theme.AMBER, "dash": "dash", "width": 2.5},
 )
 order_lands = p.order is not None and p.order.funded and p.plan_months != p.months
 if order_lands:
@@ -58,15 +58,34 @@ if order_lands:
         x=forecast_x,
         y=[r.closing for r in p.plan_months],
         name="Stock, with next order (funded)",
-        line={"color": theme.GREEN},
+        line={"color": theme.BLUE, "width": 3},
     )
 if p.runout_month:
-    figure.add_vline(x=f"{p.runout_month}-01", line={"color": theme.RED, "dash": "dot"})
+    figure.add_vline(
+        x=f"{p.runout_month}-01", line={"color": theme.SLATE, "dash": "dot"}
+    )
 figure.update_layout(
     template=theme.TEMPLATE,
     height=420,
-    yaxis_title="Units",
-    xaxis={"dtick": "M3", "tickformat": "%b %Y"},
+    yaxis={
+        "title": "Units",
+        "range": [
+            0,
+            1.1
+            * max(
+                [*history[-6:], *(r.demand for r in p.months)]
+                + [r.closing for r in p.months + p.plan_months]
+                + [1]
+            ),
+        ],
+    },
+    xaxis={
+        "dtick": "M2",
+        "tickformat": "%b %Y",
+        "range": [f"{data.history_months[-6]}-01", f"{p.months[-1].month}-15"],
+    },
+    legend={"orientation": "h", "x": 1, "xanchor": "right", "y": 1.08},
+    margin={"t": 60},
     title=f"{product_label(p.description, p.stock_code)} · monthly units",
 )
 st.plotly_chart(figure, width="stretch")

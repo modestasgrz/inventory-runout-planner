@@ -112,7 +112,7 @@ Review findings that were fixed in later rounds:
 | Product search or filter | Later | Deferred in round 2. With 36 products a sorted table is enough. |
 | Monthly cash budget view | Later | Only if someone asks for it |
 | Thousands separators in the sidebar number inputs | Won't fix | Streamlit `number_input` limit |
-| The README test line still says 51 acceptance and 319 app checks | Leftover | The real counts are 52 and 379 (see section 1). Fix it in a small `[no-spec]` README PR. |
+| README test counts | Fixed | Updated to 52 acceptance and 379 app checks in PR #26. Update them again whenever tests are added. |
 | The spec's "In scope" still says "dark navy theme", and its out-of-scope list repeats "multi-echelon / multi-warehouse" | Leftover | Wording only. DEC-17 is what counts. Fix it in the next SPEC PR. |
 | Dependabot PR #2 is open | Leftover | Left alone on purpose. Dependency changes are the owner's call. |
 

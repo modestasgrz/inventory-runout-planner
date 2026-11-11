@@ -1,5 +1,7 @@
 # inventory-runout-planner
 
+Read `docs/HISTORY.md` first: current state, every decision and why, review rounds, known limits, gotchas, how to resume.
+
 Purchasing what-if planner (Streamlit). Real public monthly demand (UCI Online Retail II, CC BY 4.0) for top products + SYNTHETIC, clearly labelled stock, lead times, MOQ, unit cost and capacity. Shows projected stock, run-out month, limiting factor and a reorder plan within a purchase budget. No LLM, no API calls at runtime, nothing outbound.
 
 ## Stack

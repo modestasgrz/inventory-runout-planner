@@ -1,5 +1,7 @@
 # Inventory run-out planner
 
+**Live demo:** https://inventory-runout-planner.streamlit.app
+
 A what-if purchasing planner in Streamlit. It answers the questions a purchasing manager usually works through in a spreadsheet each month: **which products run out, when, what is holding each one back, and what should I reorder within this month's budget?**
 
 Demand is real: monthly units for 36 products of a UK online gift and homeware wholesaler (UCI Online Retail II, Dec 2009 – Nov 2011). Stock on hand, lead times, MOQ, unit cost, warehouse capacity and open inbound orders are **synthetic**, generated with a fixed seed, and labelled as such on every page.

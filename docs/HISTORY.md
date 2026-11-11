@@ -9,7 +9,7 @@ This file explains how the app got to its current state and how to carry on with
 | Shipped | Five pages (Overview, Forecast, Scenarios, Reorder plan, Methodology), a sidebar with scenario inputs, 5 presets plus Custom and Reset, 4 CSV exports, Graphite dark theme. The owner approved this version for the portfolio on 10 Nov. |
 | Spec | `Status: approved (Change 5)`, 52 acceptance criteria (AC-01 to AC-52), 23 locked decisions (DEC-01 to DEC-23), no open questions |
 | Main | Change 5 merged (PRs #22, #23, #24) plus the gate 5 screenshots (#25) |
-| Live URL | _Not deployed yet. The Streamlit Community Cloud deploy is a pending owner step. Add the URL here once it exists._ |
+| Live URL | https://inventory-runout-planner.streamlit.app (Streamlit Community Cloud, deployed 11 Nov 2026 from `main`; sleeps when idle, the first visit wakes it in under a minute) |
 | Data | Real monthly demand for 36 products (UCI Online Retail II, Dec 2009 – Nov 2011, CC BY 4.0). Stock, lead times, MOQ, unit cost, capacity and inbound orders are synthetic (seed 42). The planning date is fixed at 1 Dec 2011. |
 | Runtime | No LLM, no API calls and nothing outbound at runtime |
 
@@ -106,7 +106,7 @@ Review findings that were fixed in later rounds:
 | At most 4 orders per product; one warehouse; no price breaks | Limit | DEC-21 and the spec's out-of-scope list |
 | 84347 is still short from Nov 2012 under Baseline | Limit (accepted) | Its next follow-up doesn't fit the budget. It shows as "Short after plan" with its £. |
 | No upload of your own data; scenarios are not saved | Limit | Out of scope for a demo |
-| Streamlit Community Cloud deploy | Later (owner) | Needs the owner's login. `requirements.txt` is ready. Add the URL to section 1 afterwards. |
+| Streamlit Community Cloud deploy | Done 11 Nov | Live at https://inventory-runout-planner.streamlit.app. Redeploys automatically on every push to `main`. |
 | Backtest of the plan itself (Dec 2010 → Nov 2011: £ lost and £ tied up against actuals) | Later | Deferred in round 2. It is a whole new calculation, and the forecast backtest already gives the proof. |
 | Editable Funded ticks that recalculate totals | Later | Deferred in round 2. It changes the funding contract (DEC-21). |
 | Product search or filter | Later | Deferred in round 2. With 36 products a sorted table is enough. |

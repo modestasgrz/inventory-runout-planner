@@ -2,9 +2,9 @@
 
 **Live demo:** https://inventory-runout-planner.streamlit.app
 
-**Demo video (≈1 min):** click the poster to play it.
+**Demo video (≈1 min):**
 
-[![inventory-runout-planner demo video](docs/demo/inventory-runout-planner-poster.png)](docs/demo/inventory-runout-planner-demo.mp4)
+https://github.com/user-attachments/assets/a61b2087-1491-4453-8330-bb05a7a2d988
 
 A what-if purchasing planner in Streamlit. It answers the questions a purchasing manager usually works through in a spreadsheet each month: **which products run out, when, what is holding each one back, and what should I reorder within this month's budget?**
 

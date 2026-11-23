@@ -47,7 +47,7 @@ narwhals==2.28.0
     # via
     #   altair
     #   plotly
-numpy==2.5.4
+numpy==2.5.5
     # via
     #   pandas
     #   pydeck

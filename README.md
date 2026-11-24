@@ -1,6 +1,6 @@
 # Inventory run-out planner
 
-**Live demo:** https://inventory-runout-planner.streamlit.app
+**Live demo:** https://inventory-runout-planner-214227070697.europe-north1.run.app
 
 **Demo video (≈1 min):**
 
